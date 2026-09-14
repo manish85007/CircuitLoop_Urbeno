@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -8,12 +9,14 @@ TINY_PNG = (
 )
 
 
-def client() -> TestClient:
-    return TestClient(app)
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
-def test_health():
-    res = client().get("/api/health")
+def test_health(client):
+    res = client.get("/api/health")
     assert res.status_code == 200
     body = res.json()
     assert body["ok"] is True
@@ -21,43 +24,42 @@ def test_health():
     assert body["brand"] == "Urbeno"
 
 
-def test_index_serves_field_ui():
-    res = client().get("/")
+def test_index_serves_field_ui(client):
+    res = client.get("/")
     assert res.status_code == 200
     assert "CircuitLoop" in res.text
     assert "Urbeno" in res.text
 
 
-def test_session_rejects_bad_pin():
-    res = client().post("/api/session", json={"crewName": "Priya Nair", "pin": "0000"})
+def test_session_rejects_bad_pin(client):
+    res = client.post("/api/session", json={"crewName": "Priya Nair", "pin": "0000"})
     assert res.status_code == 401
     assert "PIN" in res.json()["error"]
 
 
-def test_jobs_require_session():
-    res = client().get("/api/jobs")
+def test_jobs_require_session(client):
+    res = client.get("/api/jobs")
     assert res.status_code == 401
 
 
-def test_field_loop_closes_a_job():
-    c = client()
-    auth = c.post("/api/session", json={"crewName": "Priya Nair", "pin": "4821"})
+def test_field_loop_closes_a_job(client):
+    auth = client.post("/api/session", json={"crewName": "Priya Nair", "pin": "4821"})
     assert auth.status_code == 200
     assert auth.json()["crew"]["name"] == "Priya Nair"
 
-    jobs = c.get("/api/jobs?tab=today").json()["jobs"]
+    jobs = client.get("/api/jobs?tab=today").json()["jobs"]
     scheduled = next(j for j in jobs if j["status"] == "scheduled")
     job_id = scheduled["id"]
 
-    assert c.post(f"/api/jobs/{job_id}/start-route").status_code == 200
-    check = c.post(
+    assert client.post(f"/api/jobs/{job_id}/start-route").status_code == 200
+    check = client.post(
         f"/api/jobs/{job_id}/check-in",
         json={"lat": 12.84, "lng": 77.66, "accuracy": 9},
     )
     assert check.status_code == 200
     assert check.json()["job"]["status"] == "on_site"
 
-    added = c.post(
+    added = client.post(
         f"/api/jobs/{job_id}/assets",
         json={
             "category": "laptop",
@@ -69,13 +71,13 @@ def test_field_loop_closes_a_job():
     assert added.status_code == 200
     assert added.json()["job"]["collected_units"] >= 1
 
-    seal = c.post(
+    seal = client.post(
         f"/api/jobs/{job_id}/seals",
         json={"code": "URN-SEAL-TEST", "location": "crate A"},
     )
     assert seal.status_code == 200
 
-    ack = c.post(
+    ack = client.post(
         f"/api/jobs/{job_id}/acknowledge",
         json={
             "signerName": "Kavya Iyer",
@@ -85,7 +87,7 @@ def test_field_loop_closes_a_job():
     )
     assert ack.status_code == 200
 
-    done = c.post(
+    done = client.post(
         f"/api/jobs/{job_id}/complete",
         json={"overrideNote": "Remaining units not staged for this test close."},
     )

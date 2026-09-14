@@ -4,6 +4,7 @@ import base64
 import re
 import sqlite3
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -27,7 +28,15 @@ ALLOWED_TRANSITIONS = {
 
 STATIC_DIR = ROOT / "static"
 
-app = FastAPI(title=f"{APP_NAME} field API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_dirs()
+    init_db()
+    yield
+
+
+app = FastAPI(title=f"{APP_NAME} field API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if CORS_ORIGINS == "*" else [o.strip() for o in CORS_ORIGINS.split(",")],
@@ -35,12 +44,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    ensure_dirs()
-    init_db()
 
 
 class SessionIn(BaseModel):

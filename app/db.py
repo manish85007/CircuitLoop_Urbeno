@@ -110,6 +110,9 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.executescript(SCHEMA)
+    _seed(conn)
+    conn.commit()
     return conn
 
 
