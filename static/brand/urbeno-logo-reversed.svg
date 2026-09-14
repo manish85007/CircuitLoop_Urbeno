@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 252 64" fill="none" role="img" aria-label="Urbeno  Recycling Heroes">
+  <defs>
+    <style>
+      .wm { font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif; }
+      .tg { font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif; }
+    </style>
+  </defs>
+  <g transform="translate(2 2)">
+    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white"/>
+    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(120 30 30)"/>
+    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(240 30 30)"/>
+  </g>
+  <text class="wm" x="76" y="40" font-size="34" fill="white" letter-spacing="-0.3">Urbeno</text>
+  <line x1="74" y1="47" x2="244" y2="47" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <text class="tg" x="74" y="58" font-size="9" fill="rgba(255,255,255,0.45)" letter-spacing="1.8" font-weight="600">RECYCLING HEROES</text>
+</svg>

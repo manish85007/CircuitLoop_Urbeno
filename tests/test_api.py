@@ -59,7 +59,10 @@ def test_index_is_original_field_ui(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "CircuitLoop Field" in res.text
-    assert "URBENO" in res.text
+    assert "Urbeno" in res.text
+    assert "RECYCLING HEROES" in res.text
+    assert "DM Serif Display" in res.text
+    assert "#3B6D11" in res.text
     assert "IT Asset Testing" in res.text
     assert "Scan &amp; Test" in res.text or "Scan & Test" in res.text
     assert "/static/persist.js" in res.text
