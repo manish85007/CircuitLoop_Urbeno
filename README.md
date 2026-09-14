@@ -32,7 +32,7 @@ docker run --rm -p 43180:8080 -e PORT=8080 circuitloop
 
 1. Push this repo to GitHub or Origin.
 2. In Railway: **New project → Deploy from GitHub repo** (or the Origin Git URL).
-3. Railway builds the `Dockerfile`. A `Procfile` is there if Nixpacks is used instead.
+3. Railway builds the `Dockerfile`. Start command is `python -m app`, which binds to Railway's `PORT` without shell expansion. A `Procfile` is there if Nixpacks is used instead.
 4. Variables (all optional on first boot):
 
 | Variable | What it does | Local fallback |
