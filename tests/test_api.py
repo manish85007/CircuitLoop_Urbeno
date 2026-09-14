@@ -3,10 +3,43 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-TINY_PNG = (
-    "data:image/png;base64,"
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
-)
+SEED = {
+    "company": {"name": "Urbeno Technologies Pvt Ltd", "brand": "CircuitLoop Field", "gstin": "27AABCU9603R1ZM", "currency": "INR"},
+    "users": [
+        {"id": "U-1", "name": "Manish Kumar", "email": "manish85007@gmail.com", "role": "Super Admin", "phone": "", "active": True}
+    ],
+    "clients": [],
+    "projects": [
+        {
+            "id": "PRJ-1001",
+            "name": "Test project",
+            "clientId": "CL-1",
+            "site": "Pune",
+            "mode": "Onsite (Client Premises)",
+            "start": "2026-09-01",
+            "due": "2026-09-20",
+            "status": "Active",
+            "managerId": "U-1",
+            "team": ["U-1"],
+            "scope": [{"category": "Laptop", "expected": 1}],
+            "notes": "",
+        }
+    ],
+    "assets": [],
+    "manifests": [],
+    "categories": ["Laptop"],
+    "blanccoCategories": ["Laptop"],
+    "blanccoConfig": {
+        "endpoint": "https://api.blancco.cloud/v1/erasure-reports",
+        "apiKey": "",
+        "mode": "Demo (simulated)",
+        "autoFetch": True,
+        "lastSync": "",
+    },
+    "testParams": {},
+    "specFields": {},
+    "seq": {"asset": 1, "usn": 50001, "project": 1004, "client": 4, "user": 6, "blancco": 9001},
+}
 
 
 @pytest.fixture
@@ -18,78 +51,55 @@ def client():
 def test_health(client):
     res = client.get("/api/health")
     assert res.status_code == 200
-    body = res.json()
-    assert body["ok"] is True
-    assert body["app"] == "CircuitLoop"
-    assert body["brand"] == "Urbeno"
+    assert res.json()["app"] == "CircuitLoop"
+    assert res.json()["brand"] == "Urbeno"
 
 
-def test_index_serves_field_ui(client):
+def test_index_is_original_field_ui(client):
     res = client.get("/")
     assert res.status_code == 200
-    assert "CircuitLoop" in res.text
-    assert "Urbeno" in res.text
+    assert "CircuitLoop Field" in res.text
+    assert "URBENO" in res.text
+    assert "IT Asset Testing" in res.text
+    assert "Scan &amp; Test" in res.text or "Scan & Test" in res.text
+    assert "/static/persist.js" in res.text
+    assert "Check in on site" not in res.text
 
 
-def test_session_rejects_bad_pin(client):
-    res = client.post("/api/session", json={"crewName": "Priya Nair", "pin": "0000"})
-    assert res.status_code == 401
-    assert "PIN" in res.json()["error"]
+def test_jobs_api_removed(client):
+    assert client.get("/api/jobs").status_code == 404
 
 
-def test_jobs_require_session(client):
-    res = client.get("/api/jobs")
-    assert res.status_code == 401
+def test_state_roundtrip(client):
+    empty = client.get("/api/state")
+    assert empty.status_code == 200
+    assert empty.json()["state"] is None
+
+    saved = client.put("/api/state", json={"state": SEED})
+    assert saved.status_code == 200
+    assert saved.json()["state"]["company"]["brand"] == "CircuitLoop Field"
+
+    loaded = client.get("/api/state")
+    assert loaded.json()["state"]["projects"][0]["id"] == "PRJ-1001"
 
 
-def test_field_loop_closes_a_job(client):
-    auth = client.post("/api/session", json={"crewName": "Priya Nair", "pin": "4821"})
+def test_state_rejects_partial(client):
+    res = client.put("/api/state", json={"state": {"users": []}})
+    assert res.status_code == 400
+
+
+def test_session_and_blancco(client):
+    client.put("/api/state", json={"state": SEED})
+    auth = client.post("/api/session", json={"userId": "U-1"})
     assert auth.status_code == 200
-    assert auth.json()["crew"]["name"] == "Priya Nair"
+    assert auth.json()["user"]["role"] == "Super Admin"
+    me = client.get("/api/session")
+    assert me.json()["user"]["id"] == "U-1"
 
-    jobs = client.get("/api/jobs?tab=today").json()["jobs"]
-    scheduled = next(j for j in jobs if j["status"] == "scheduled")
-    job_id = scheduled["id"]
+    demo = client.post("/api/blancco/lookup", json={"serial": "DL5540-88213", "category": "Laptop"})
+    assert demo.status_code == 200
+    assert demo.json()["ok"] is True
+    assert demo.json()["report"]["status"] == "Erased"
 
-    assert client.post(f"/api/jobs/{job_id}/start-route").status_code == 200
-    check = client.post(
-        f"/api/jobs/{job_id}/check-in",
-        json={"lat": 12.84, "lng": 77.66, "accuracy": 9},
-    )
-    assert check.status_code == 200
-    assert check.json()["job"]["status"] == "on_site"
-
-    added = client.post(
-        f"/api/jobs/{job_id}/assets",
-        json={
-            "category": "laptop",
-            "serialNumber": "TEST-001",
-            "dataBearing": True,
-            "destructionMethod": "wipe",
-        },
-    )
-    assert added.status_code == 200
-    assert added.json()["job"]["collected_units"] >= 1
-
-    seal = client.post(
-        f"/api/jobs/{job_id}/seals",
-        json={"code": "URN-SEAL-TEST", "location": "crate A"},
-    )
-    assert seal.status_code == 200
-
-    ack = client.post(
-        f"/api/jobs/{job_id}/acknowledge",
-        json={
-            "signerName": "Kavya Iyer",
-            "signerRole": "Facilities",
-            "signatureDataUrl": TINY_PNG,
-        },
-    )
-    assert ack.status_code == 200
-
-    done = client.post(
-        f"/api/jobs/{job_id}/complete",
-        json={"overrideNote": "Remaining units not staged for this test close."},
-    )
-    assert done.status_code == 200
-    assert done.json()["job"]["status"] == "complete"
+    skip = client.post("/api/blancco/lookup", json={"serial": "SW-1", "category": "Switch"})
+    assert skip.json()["ok"] is False

@@ -1,19 +1,2124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d2910" />
-  <title>CircuitLoop · Urbeno field</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
+<meta name="theme-color" content="#0f1b2d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CircuitLoop Field">
+<title>CircuitLoop Field — Urbeno ITAD Testing</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--navy:#0f1b2d;--navy2:#16263e;--accent:#14b8a6;--accent2:#0d9488;--blue:#3b82f6;--amber:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#8b5cf6;--bg:#f1f5f9;--card:#fff;--line:#e2e8f0;--txt:#0f172a;--mut:#64748b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+.app{display:flex;min-height:100vh}
+.sidebar{width:228px;background:var(--navy);color:#cbd5e1;position:fixed;top:0;bottom:0;left:0;overflow-y:auto;z-index:50}
+.logo{padding:16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo .wm{display:flex;align-items:center;gap:8px}
+.logo .sub{font-size:12px;color:#94a3b8;margin-top:7px;font-weight:500}
+.navsec{padding:12px 16px 4px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;font-weight:700}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:#cbd5e1;text-decoration:none;font-size:13px;border-left:3px solid transparent;cursor:pointer}
+.nav a:hover{background:var(--navy2);color:#fff}
+.nav a.active{background:var(--navy2);color:#fff;border-left-color:var(--accent)}
+.nav a .ico{width:18px;text-align:center}
+.main{margin-left:228px;flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:11px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40;gap:12px}
+.topbar h1{font-size:17px;font-weight:600}
+.crumb{color:var(--mut);font-size:12px}
+.userchip{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mut)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.content{padding:20px 24px;flex:1}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:600}
+.kpi .val{font-size:24px;font-weight:700;margin-top:4px}
+.kpi .sub{font-size:11px;color:var(--mut);margin-top:2px}
+.kpi.teal .val{color:var(--accent2)}.kpi.blue .val{color:var(--blue)}.kpi.amber .val{color:var(--amber)}.kpi.red .val{color:var(--red)}.kpi.green .val{color:var(--green)}.kpi.purple .val{color:var(--purple)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-h h3{font-size:14px;font-weight:600}
+.card-b{padding:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;background:#f8fafc;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#f8fafc}
+.tblwrap{overflow-x:auto}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-gray{background:#f1f5f9;color:#475569}.b-blue{background:#dbeafe;color:#1d4ed8}.b-teal{background:#ccfbf1;color:#0f766e}
+.b-amber{background:#fef3c7;color:#b45309}.b-red{background:#fee2e2;color:#b91c1c}.b-green{background:#dcfce7;color:#15803d}.b-purple{background:#ede9fe;color:#6d28d9}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer}
+.btn:hover{background:#f8fafc}
+.btn-p{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn-p:hover{background:#0f766e}
+.btn-sm{padding:4px 10px;font-size:12px;border-radius:6px}
+.btn-danger{color:var(--red);border-color:#fecaca}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+label.f{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid #99f6e4;border-color:var(--accent)}
+input[type=checkbox]{width:auto}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+@media(max-width:800px){.frow,.frow3{grid-template-columns:1fr}}
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:620px;max-height:90vh;overflow-y:auto}
+.modal.wide{max-width:860px}
+.modal-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;z-index:2}
+.modal-h h3{font-size:15px}
+.modal-b{padding:18px}
+.modal-f{padding:14px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#fff}
+.x{background:none;border:none;font-size:20px;cursor:pointer;color:var(--mut)}
+#toast{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;flex-direction:column;gap:8px;max-width:380px}
+.toastmsg{background:var(--navy);color:#fff;padding:11px 16px;border-radius:8px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:tin .25s}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.progressbar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden}
+.progressbar>div{height:100%;background:var(--accent);border-radius:99px}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.stat{background:#f8fafc;border-radius:8px;padding:10px;text-align:center}
+.stat .v{font-size:18px;font-weight:700}
+.stat .l{font-size:11px;color:var(--mut)}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--mut)}
+.tag{font-size:11px;background:#f1f5f9;border-radius:5px;padding:2px 7px;color:#475569;margin-right:4px;display:inline-block}
+.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.okbox{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.errbox{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.subtab{padding:8px 14px;font-size:13px;font-weight:500;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent}
+.subtab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+.linklike{color:var(--blue);cursor:pointer;text-decoration:underline}
+.chartbox{position:relative;height:230px}
+.scanbox{background:linear-gradient(135deg,#0f1b2d,#16263e);border-radius:12px;padding:20px;color:#fff}
+.scanbox input{font-size:17px;padding:13px 14px;font-family:ui-monospace,Menlo,monospace;letter-spacing:.5px}
+.scanbox .hint{font-size:12px;color:#94a3b8;margin-top:8px}
+.testrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.testrow:last-child{border-bottom:none}
+.testrow .nm{font-size:13px;font-weight:500}
+.testrow .cr{font-size:11px;color:var(--red);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:none;background:#fff;padding:6px 13px;font-size:12px;cursor:pointer;font-weight:600;color:var(--mut)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on-pass{background:#dcfce7;color:#15803d}
+.seg button.on-fail{background:#fee2e2;color:#b91c1c}
+.seg button.on-na{background:#f1f5f9;color:#475569}
+.gradebox{font-size:34px;font-weight:800;text-align:center;padding:10px}
+.bcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.bclabel{border:1px dashed #94a3b8;border-radius:6px;padding:8px 6px;text-align:center;background:#fff}
+.bclabel svg{max-width:100%;height:auto}
+.bctxt{font-size:10.5px;line-height:1.5;margin-top:2px}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1b2d,#16263e);padding:20px}
+.loginbox{background:#fff;border-radius:14px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.usercard{border:1px solid var(--line);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:11px;cursor:pointer;margin-bottom:9px}
+.usercard:hover{border-color:var(--accent);background:#f0fdfa}
+.hide{display:none !important}
+@media print{.sidebar,.topbar,.bottombar,.fab,.navburger{display:none}.main{margin:0}}
+
+/* ---------- mobile ---------- */
+.navburger{display:none;background:none;border:1px solid var(--line);border-radius:8px;font-size:18px;padding:5px 11px;cursor:pointer;line-height:1}
+.scrim{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:45;display:none}
+.scrim.on{display:block}
+.bottombar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:44;background:#fff;border-top:1px solid var(--line);
+ padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+.bottombar a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--mut);
+ text-decoration:none;padding:5px 2px;border-radius:8px;cursor:pointer;font-weight:600}
+.bottombar a .bi{font-size:17px;line-height:1}
+.bottombar a.active{color:var(--accent2);background:#f0fdfa}
+.fab{display:none;position:fixed;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:46;
+ width:60px;height:60px;border-radius:50%;background:var(--accent2);color:#fff;border:none;
+ box-shadow:0 8px 22px rgba(13,148,136,.45);font-size:24px;align-items:center;justify-content:center;cursor:pointer}
+.fab:active{transform:scale(.94)}
+
+/* camera scanner */
+.scanwrap{background:#000;border-radius:10px;overflow:hidden;position:relative;min-height:260px}
+#scanregion{width:100%}
+#scanregion video{width:100%!important;display:block;border-radius:10px}
+.scanguide{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.scanguide i{display:block;width:82%;height:34%;border:2px solid rgba(20,184,166,.95);border-radius:10px;
+ box-shadow:0 0 0 100vmax rgba(0,0,0,.35)}
+.scanline{position:absolute;left:9%;width:82%;height:2px;background:#14b8a6;box-shadow:0 0 10px #14b8a6;animation:sl 2s ease-in-out infinite}
+@keyframes sl{0%,100%{top:34%}50%{top:66%}}
+.scanhits{max-height:150px;overflow:auto;font-size:12.5px}
+.scanhits div{padding:6px 8px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+
+@media(max-width:900px){
+ .sidebar{transform:translateX(-100%);transition:transform .22s ease;width:252px;box-shadow:0 0 40px rgba(0,0,0,.4);
+   padding-bottom:env(safe-area-inset-bottom)}
+ .sidebar.open{transform:none}
+ .main{margin-left:0}
+ .navburger{display:block}
+ .bottombar{display:flex}
+ .fab{display:flex}
+ .topbar{padding:9px 12px;gap:8px}
+ .topbar h1{font-size:15px}
+ .crumb{display:none}
+ .userchip span{display:none}
+ .content{padding:14px 12px 90px}
+ input,select,textarea{font-size:16px;padding:10px 12px}   /* 16px stops iOS auto-zoom */
+ .btn{padding:9px 14px}
+ .btn-sm{padding:7px 11px;font-size:12.5px}
+ .grid2,.frow,.frow3{grid-template-columns:1fr}
+ .kpis{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+ .kpi .val{font-size:20px}
+ .card{border-radius:10px}
+ .card-h{padding:11px 13px}
+ .card-b{padding:13px}
+ .modal-bg{padding:0;align-items:flex-end}
+ .modal,.modal.wide{max-width:100%;max-height:100vh;height:100%;border-radius:0}
+ .modal-b{padding:14px;padding-bottom:24px}
+ .modal-h{padding:13px 14px}
+ .modal-f{padding:12px 14px calc(12px + env(safe-area-inset-bottom));flex-wrap:wrap}
+ .modal-f .btn{flex:1;justify-content:center;min-width:44%}
+ .subtabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+ .subtab{white-space:nowrap}
+ .testrow{grid-template-columns:1fr;gap:7px;padding:11px 0}
+ .seg{width:100%}
+ .seg button{flex:1;padding:11px 0;font-size:13px}
+ .statgrid{grid-template-columns:repeat(3,1fr)}
+ .scanbox{padding:15px;border-radius:12px}
+ .bcgrid{grid-template-columns:1fr 1fr}
+ /* stacked tables */
+ table.stack thead{display:none}
+ table.stack,table.stack tbody,table.stack tr,table.stack td{display:block;width:100%}
+ table.stack tr{border:1px solid var(--line);border-radius:10px;margin-bottom:9px;padding:4px 2px;background:#fff}
+ table.stack tr:hover{background:#fff}
+ table.stack td{border:none;padding:6px 10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:right}
+ table.stack td:before{content:attr(data-l);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+   color:var(--mut);text-align:left;flex:0 0 38%;padding-top:2px}
+ table.stack td[data-l=""]{display:block;text-align:left}
+ table.stack td[data-l=""]:before{content:none}
+ table.stack td.flex{flex-wrap:wrap;justify-content:flex-end}
+ .tblwrap{overflow-x:visible}
+}
+@media(max-width:420px){
+ .kpis{grid-template-columns:1fr 1fr}
+ .statgrid{grid-template-columns:repeat(2,1fr)}
+ .bcgrid{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body>
-  <div id="app">
-    <p class="boot">Loading CircuitLoop…</p>
+<div id="loginview" class="login">
+  <div class="loginbox">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <svg width="118" height="28" viewBox="0 0 118 28" xmlns="http://www.w3.org/2000/svg" aria-label="Urbeno">
+        <defs><linearGradient id="ug1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+        <rect x="0" y="0" width="28" height="28" rx="7" fill="url(#ug1)"/>
+        <text x="14" y="20" text-anchor="middle" font-family="Segoe UI,Arial" font-size="16" font-weight="800" fill="#fff">U</text>
+        <text x="36" y="20" font-family="Segoe UI,Arial" font-size="15" font-weight="700" fill="#0f172a" letter-spacing="2">URBENO</text>
+      </svg>
+    </div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:2px">CircuitLoop <span style="color:var(--accent2)">Field</span></div>
+    <div class="muted" style="font-size:13px;margin-bottom:18px">IT Asset Testing &amp; Project Management</div>
+    <div class="muted" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sign in as</div>
+    <div id="loginusers"></div>
+    <div class="muted" style="font-size:11px;margin-top:14px">Demo build — select a user to continue. Super Admin sees everything; Field Engineers see only asset capture and testing for their assigned projects.</div>
   </div>
-  <script src="/static/app.js" defer></script>
+</div>
+
+<div class="app hide" id="appview">
+<aside class="sidebar">
+  <div class="logo">
+    <div class="wm">
+      <svg width="118" height="26" viewBox="0 0 118 28" xmlns="http://www.w3.org/2000/svg" aria-label="Urbeno">
+        <defs><linearGradient id="ug2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+        <rect x="0" y="0" width="28" height="28" rx="7" fill="url(#ug2)"/>
+        <text x="14" y="20" text-anchor="middle" font-family="Segoe UI,Arial" font-size="16" font-weight="800" fill="#fff">U</text>
+        <text x="36" y="20" font-family="Segoe UI,Arial" font-size="15" font-weight="700" fill="#fff" letter-spacing="2">URBENO</text>
+      </svg>
+    </div>
+    <div class="sub">CircuitLoop <span style="color:var(--accent)">Field</span></div>
+  </div>
+  <nav class="nav" id="nav"></nav>
+</aside>
+<div class="main">
+  <div class="topbar">
+    <button class="navburger" onclick="toggleDrawer()" aria-label="Menu">☰</button>
+    <div style="flex:1;min-width:0"><h1 id="pagetitle">Dashboard</h1><div class="crumb" id="pagecrumb"></div></div>
+    <div class="userchip">
+      <span id="whoami"></span>
+      <div class="avatar" id="whoavatar">U</div>
+      <button class="btn btn-sm" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+</div>
+<div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
+<div class="bottombar" id="bottombar"></div>
+<button class="fab hide" id="fab" onclick="cameraScan()" aria-label="Scan barcode">⌁</button>
+<div class="modal-bg" id="modalbg"><div class="modal" id="modalbox"></div></div>
+<div id="toast"></div>
+<script>
+/* ============================================================
+   CircuitLoop Field — data model
+   ============================================================ */
+const DB={
+company:{name:'Urbeno Technologies Pvt Ltd',brand:'CircuitLoop Field',gstin:'27AABCU9603R1ZM',currency:'INR'},
+users:[
+ {id:'U-1',name:'Manish Kumar',email:'manish85007@gmail.com',role:'Super Admin',phone:'+91 98200 10001',active:true},
+ {id:'U-2',name:'S. Iyer',email:'s.iyer@urbeno.in',role:'Super Admin',phone:'+91 98200 10002',active:true},
+ {id:'U-3',name:'A. Verma',email:'a.verma@urbeno.in',role:'Field Engineer',phone:'+91 98200 10003',active:true},
+ {id:'U-4',name:'R. Alvarez',email:'r.alvarez@urbeno.in',role:'Field Engineer',phone:'+91 98200 10004',active:true},
+ {id:'U-5',name:'P. Shetty',email:'p.shetty@urbeno.in',role:'Field Engineer',phone:'+91 98200 10005',active:true}
+],
+clients:[
+ {id:'CL-1',name:'Meridian Health Systems',gstin:'27AAACM4521H1Z2',pan:'AAACM4521H',contact:'Sarah Okafor',phone:'+91 98220 40147',email:'s.okafor@meridianhealth.in',address:'Meridian House, Baner Road, Pune 411045'},
+ {id:'CL-2',name:'Vantage Financial Group',gstin:'27AAACV8811F1Z9',pan:'AAACV8811F',contact:'Derek Lin',phone:'+91 99300 20198',email:'dlin@vantagefg.in',address:'Vantage Towers, BKC, Mumbai 400051'},
+ {id:'CL-3',name:'Northwind Logistics',gstin:'29AAACN3344K1Z4',pan:'AAACN3344K',contact:'Amanda Reyes',phone:'+91 98450 30122',email:'areyes@northwindlog.in',address:'Whitefield, Bengaluru 560066'}
+],
+categories:['Laptop','Desktop','Monitor','Thin Client','Tiny PC','Server','Switch','All-in-One','Tablet','Printer'],
+/* Blancco applies to laptops only, per policy */
+blanccoCategories:['Laptop'],
+blanccoConfig:{endpoint:'https://api.blancco.cloud/v1/erasure-reports',apiKey:'',mode:'Demo (simulated)',autoFetch:true,lastSync:'2026-09-13 18:40'},
+testParams:{
+ 'Laptop':[
+  {key:'poweron',label:'Powers on / boots to BIOS',critical:true},
+  {key:'display',label:'Display — no dead pixels / lines',critical:true},
+  {key:'keyboard',label:'Keyboard — all keys functional',critical:false},
+  {key:'touchpad',label:'Touchpad / trackpoint',critical:false},
+  {key:'battery',label:'Battery health ≥ 70%',critical:false,measure:'Battery health %'},
+  {key:'ports',label:'USB / HDMI / Type-C ports',critical:false},
+  {key:'webcam',label:'Webcam &amp; microphone',critical:false},
+  {key:'audio',label:'Speakers / audio jack',critical:false},
+  {key:'wifi',label:'WiFi &amp; Bluetooth',critical:false},
+  {key:'charger',label:'Charger / adapter present',critical:false},
+  {key:'biosclear',label:'BIOS / firmware password cleared',critical:true},
+  {key:'sanitize',label:'Data sanitization verified (Blancco)',critical:true,blancco:true}
+ ],
+ 'Desktop':[
+  {key:'poweron',label:'Powers on / completes POST',critical:true},
+  {key:'ram',label:'RAM detected &amp; stable',critical:false,measure:'RAM (GB)'},
+  {key:'storage',label:'Storage detected / SMART OK',critical:false,measure:'Storage'},
+  {key:'ports',label:'Front &amp; rear ports',critical:false},
+  {key:'psu',label:'PSU stable under load',critical:true},
+  {key:'gpu',label:'Graphics output',critical:false},
+  {key:'sanitize',label:'Data sanitization completed',critical:true}
+ ],
+ 'Monitor':[
+  {key:'poweron',label:'Powers on',critical:true},
+  {key:'panel',label:'Panel — no dead pixels / burn-in',critical:true},
+  {key:'backlight',label:'Backlight uniform',critical:false},
+  {key:'ports',label:'HDMI / VGA / DP inputs',critical:false},
+  {key:'buttons',label:'OSD buttons functional',critical:false},
+  {key:'stand',label:'Stand included',critical:false},
+  {key:'cables',label:'Power + video cable included',critical:false}
+ ],
+ 'Thin Client':[
+  {key:'poweron',label:'Powers on / boots firmware',critical:true},
+  {key:'network',label:'Ethernet / WiFi connectivity',critical:true},
+  {key:'ports',label:'USB / display ports',critical:false},
+  {key:'adapter',label:'Power adapter present',critical:false},
+  {key:'mount',label:'Mount / stand included',critical:false},
+  {key:'sanitize',label:'Flash storage sanitized',critical:true}
+ ],
+ 'Tiny PC':[
+  {key:'poweron',label:'Powers on / completes POST',critical:true},
+  {key:'ram',label:'RAM detected',critical:false,measure:'RAM (GB)'},
+  {key:'storage',label:'Storage detected / SMART OK',critical:false,measure:'Storage'},
+  {key:'ports',label:'USB / DP / HDMI ports',critical:false},
+  {key:'wifi',label:'WiFi &amp; Bluetooth',critical:false},
+  {key:'adapter',label:'Power adapter present',critical:false},
+  {key:'sanitize',label:'Data sanitization completed',critical:true}
+ ],
+ 'Server':[
+  {key:'poweron',label:'Powers on / POST clean',critical:true},
+  {key:'mgmt',label:'iDRAC / iLO / BMC accessible',critical:false},
+  {key:'cpu',label:'All CPUs detected',critical:true,measure:'CPU count'},
+  {key:'ram',label:'All DIMMs detected',critical:false,measure:'RAM (GB)'},
+  {key:'drives',label:'Drive bays &amp; caddies present',critical:false,measure:'Drive count'},
+  {key:'raid',label:'RAID controller detected',critical:false},
+  {key:'psu',label:'PSU redundancy OK',critical:true},
+  {key:'rails',label:'Rails / bezel included',critical:false},
+  {key:'sanitize',label:'All drives sanitized / removed',critical:true}
+ ],
+ 'Switch':[
+  {key:'poweron',label:'Powers on / boots IOS-firmware',critical:true},
+  {key:'console',label:'Console access OK',critical:false},
+  {key:'ports',label:'All ports link up',critical:true,measure:'Port count'},
+  {key:'poe',label:'PoE delivering power',critical:false},
+  {key:'fans',label:'Fans / thermals normal',critical:false},
+  {key:'stack',label:'Stacking module present',critical:false},
+  {key:'configerase',label:'Config erased to factory',critical:true}
+ ],
+ 'All-in-One':[
+  {key:'poweron',label:'Powers on / completes POST',critical:true},
+  {key:'panel',label:'Panel — no dead pixels',critical:true},
+  {key:'touch',label:'Touchscreen (if applicable)',critical:false},
+  {key:'ports',label:'Ports functional',critical:false},
+  {key:'webcam',label:'Webcam &amp; audio',critical:false},
+  {key:'sanitize',label:'Data sanitization completed',critical:true}
+ ],
+ 'Tablet':[
+  {key:'poweron',label:'Powers on / boots OS',critical:true},
+  {key:'panel',label:'Screen &amp; touch response',critical:true},
+  {key:'battery',label:'Battery health ≥ 70%',critical:false,measure:'Battery health %'},
+  {key:'cameras',label:'Front &amp; rear cameras',critical:false},
+  {key:'charging',label:'Charging port functional',critical:false},
+  {key:'sanitize',label:'Factory reset / MDM removed',critical:true}
+ ],
+ 'Printer':[
+  {key:'poweron',label:'Powers on',critical:true},
+  {key:'printtest',label:'Test page prints clean',critical:true},
+  {key:'network',label:'Network / USB connectivity',critical:false},
+  {key:'trays',label:'Trays &amp; feeders present',critical:false},
+  {key:'consumable',label:'Consumable level',critical:false,measure:'Toner %'},
+  {key:'sanitize',label:'Internal storage sanitized',critical:false}
+ ]
+},
+specFields:{
+ 'Laptop':['Processor','Generation','RAM','Storage','Screen Size','GPU','Year'],
+ 'Desktop':['Processor','Generation','RAM','Storage','Form Factor','GPU','Year'],
+ 'Monitor':['Screen Size','Panel Type','Resolution','Year'],
+ 'Thin Client':['Processor','RAM','Flash Storage','OS','Year'],
+ 'Tiny PC':['Processor','Generation','RAM','Storage','Year'],
+ 'Server':['Form Factor','Processor','CPU Count','RAM','Drive Config','RAID','PSU','Year'],
+ 'Switch':['Port Count','Speed','PoE','Stackable','Firmware','Year'],
+ 'All-in-One':['Processor','RAM','Storage','Screen Size','Year'],
+ 'Tablet':['Processor','RAM','Storage','Screen Size','Cellular','Year'],
+ 'Printer':['Type','Mono/Colour','Duplex','Network','Year']
+},
+projects:[
+ {id:'PRJ-1001',name:'Meridian Clinic Refresh — Phase 1',clientId:'CL-1',site:'Meridian Clinic, Oak Park, Pune',mode:'Onsite (Client Premises)',
+  start:'2026-09-01',due:'2026-09-20',status:'Active',managerId:'U-2',team:['U-3','U-4'],
+  scope:[{category:'Laptop',expected:40},{category:'Desktop',expected:15},{category:'Monitor',expected:25},{category:'Thin Client',expected:10}],
+  notes:'HIPAA-sensitive. Every data-bearing device needs verified erasure before dispatch. Blancco reports mandatory for laptops.'},
+ {id:'PRJ-1002',name:'Vantage HQ Decommission',clientId:'CL-2',site:'Vantage Towers, BKC, Mumbai',mode:'Onsite (Client Premises)',
+  start:'2026-09-08',due:'2026-09-30',status:'Active',managerId:'U-1',team:['U-3','U-5'],
+  scope:[{category:'Laptop',expected:30},{category:'Server',expected:6},{category:'Switch',expected:8},{category:'Monitor',expected:20}],
+  notes:'Security escort required. Servers to be tested in situ, drives sanitized onsite.'},
+ {id:'PRJ-1003',name:'Northwind Depot Q3 Refresh',clientId:'CL-3',site:'Whitefield, Bengaluru',mode:'Urbeno Facility',
+  start:'2026-08-10',due:'2026-08-28',status:'Completed',managerId:'U-2',team:['U-4'],
+  scope:[{category:'Laptop',expected:2},{category:'Tiny PC',expected:1}],
+  notes:'Closed. All assets tested and verified.'}
+],
+assets:[],
+manifests:[],
+seq:{asset:1,usn:50001,project:1004,client:4,user:6,blancco:9001}
+};
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const today=()=>new Date().toISOString().slice(0,10);
+const stamp=()=>{const d=new Date();return d.toISOString().slice(0,10)+' '+d.toTimeString().slice(0,5);};
+const fmtINR=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const userName=id=>{const u=DB.users.find(x=>x.id===id);return u?u.name:'—';};
+const clientName=id=>{const c=DB.clients.find(x=>x.id===id);return c?c.name:'—';};
+const projectById=id=>DB.projects.find(p=>p.id===id);
+const projectName=id=>{const p=projectById(id);return p?p.name:'—';};
+const paramsFor=cat=>DB.testParams[cat]||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
+const specsFor=cat=>DB.specFields[cat]||['Make/Model detail','Year'];
+const isBlanccoCat=cat=>DB.blanccoCategories.includes(cat);
+function badge(s){
+ const m={'Registered':'b-gray','In Testing':'b-amber','Tested':'b-purple','Verified':'b-green','Rejected':'b-red',
+  'Active':'b-teal','Planned':'b-blue','On Hold':'b-amber','Completed':'b-green','Cancelled':'b-gray',
+  'A':'b-green','B':'b-blue','C':'b-amber','D':'b-red','Pass':'b-green','Fail':'b-red','N/A':'b-gray',
+  'Matched':'b-green','Missing':'b-red','Unexpected':'b-amber','Super Admin':'b-purple','Field Engineer':'b-blue',
+  'Erased':'b-green','Failed':'b-red','Pending':'b-amber','Not Applicable':'b-gray'};
+ return '<span class="badge '+(m[s]||'b-gray')+'">'+esc(s)+'</span>';
+}
+function toast(msg){const t=document.createElement('div');t.className='toastmsg';t.textContent=msg;$('#toast').appendChild(t);setTimeout(()=>t.remove(),4000);}
+function openModal(html,wide){$('#modalbox').className='modal'+(wide?' wide':'');$('#modalbox').innerHTML=html;$('#modalbg').classList.add('open');}
+function closeModal(){$('#modalbg').classList.remove('open');}
+function csvDownload(name,text){
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8;'}));
+ a.download=name;a.click();
+}
+function toCSV(cols,rows){
+ return [cols.join(',')].concat(rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(','))).join('\n');
+}
+function parseCSV(text){
+ const rows=[];let cur='',row=[],inQ=false;text=String(text).replace(/\r/g,'');
+ for(let i=0;i<text.length;i++){
+  const ch=text[i];
+  if(inQ){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=ch;}
+  else if(ch==='"')inQ=true;
+  else if(ch===','){row.push(cur);cur='';}
+  else if(ch==='\n'){row.push(cur);rows.push(row);row=[];cur='';}
+  else cur+=ch;
+ }
+ if(cur!==''||row.length){row.push(cur);rows.push(row);}
+ if(rows.length<2)return [];
+ const hdr=rows[0].map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''));
+ return rows.slice(1).filter(r=>r.some(c=>String(c).trim()!=='')).map(r=>{const o={};hdr.forEach((h,i)=>o[h]=String(r[i]==null?'':r[i]).trim());return o;});
+}
+function genUSN(){return 'URB-'+String(DB.seq.usn++).padStart(6,'0');}
+function genAssetId(){return 'AST-'+String(DB.seq.asset++).padStart(5,'0');}
+
+/* ============================================================
+   Grading engine
+   ============================================================ */
+function gradeAsset(a){
+ const params=paramsFor(a.category);
+ const answered=params.filter(p=>a.tests&&a.tests[p.key]);
+ const fails=params.filter(p=>a.tests&&a.tests[p.key]==='Fail');
+ const critFails=fails.filter(p=>p.critical);
+ const cosmetic=a.cosmetic||'B';
+ if(critFails.length){
+  return {grade:'D',reason:'Critical failure: '+critFails.map(p=>p.label.replace(/&amp;/g,'&')).join(', '),fails:fails.length,critFails:critFails.length,answered:answered.length,total:params.length};
+ }
+ const idx={A:0,B:1,C:2,D:3}[cosmetic];
+ const demote=fails.length>=3?2:fails.length>=1?1:0;
+ const grade='ABCD'[Math.min(3,idx+demote)];
+ return {grade,reason:fails.length?fails.length+' non-critical issue(s) + cosmetic '+cosmetic:'All tests passed, cosmetic '+cosmetic,
+  fails:fails.length,critFails:0,answered:answered.length,total:params.length};
+}
+function testProgress(a){
+ const params=paramsFor(a.category);
+ const done=params.filter(p=>a.tests&&a.tests[p.key]).length;
+ return {done,total:params.length,pct:params.length?Math.round(done/params.length*100):0};
+}
+function isTestComplete(a){const p=testProgress(a);return p.done===p.total;}
+function blanccoRequired(a){return isBlanccoCat(a.category);}
+function blanccoOK(a){return !!(a.blancco&&a.blancco.status==='Erased');}
+
+/* ============================================================
+   Auth & roles
+   ============================================================ */
+let ME=null;
+const NAV=[
+ {sec:'Overview',items:[{v:'dashboard',ico:'▦',label:'Dashboard',roles:['Super Admin','Field Engineer']}]},
+ {sec:'Field Work',items:[
+  {v:'testing',ico:'⌁',label:'Scan &amp; Test',roles:['Super Admin','Field Engineer']},
+  {v:'myprojects',ico:'◈',label:'My Projects',roles:['Field Engineer']}
+ ]},
+ {sec:'Management',items:[
+  {v:'projects',ico:'◈',label:'Projects',roles:['Super Admin']},
+  {v:'register',ico:'▤',label:'Asset Register',roles:['Super Admin']},
+  {v:'blancco',ico:'🛡',label:'Blancco Erasure',roles:['Super Admin']},
+  {v:'reconcile',ico:'⇄',label:'Reconciliation',roles:['Super Admin']},
+  {v:'reports',ico:'⎙',label:'Reports',roles:['Super Admin']}
+ ]},
+ {sec:'Administration',items:[
+  {v:'masters',ico:'⚒',label:'Masters',roles:['Super Admin']},
+  {v:'usersadmin',ico:'☖',label:'Users',roles:['Super Admin']}
+ ]}
+];
+function allowedViews(){
+ const out=[];NAV.forEach(g=>g.items.forEach(i=>{if(i.roles.includes(ME.role))out.push(i.v);}));return out;
+}
+function canEdit(){return ME&&ME.role==='Super Admin';}
+function myProjects(){
+ if(ME.role==='Super Admin')return DB.projects;
+ return DB.projects.filter(p=>p.team.includes(ME.id)||p.managerId===ME.id);
+}
+function myProjectIds(){return myProjects().map(p=>p.id);}
+function visibleAssets(){
+ if(ME.role==='Super Admin')return DB.assets;
+ const ids=myProjectIds();
+ return DB.assets.filter(a=>ids.includes(a.projectId));
+}
+function renderLogin(){
+ $('#loginusers').innerHTML=DB.users.filter(u=>u.active).map(u=>`
+  <div class="usercard" onclick="login('${u.id}')">
+    <div class="avatar" style="background:${u.role==='Super Admin'?'#8b5cf6':'#3b82f6'}">${esc(u.name.split(' ').map(x=>x[0]).join('').slice(0,2))}</div>
+    <div style="flex:1"><div style="font-weight:600">${esc(u.name)}</div><div class="muted" style="font-size:12px">${esc(u.email)}</div></div>
+    ${badge(u.role)}
+  </div>`).join('');
+}
+function login(uid){
+ ME=DB.users.find(u=>u.id===uid);
+ $('#loginview').classList.add('hide');
+ $('#appview').classList.remove('hide');
+ $('#whoami').textContent=ME.name+' · '+ME.role;
+ $('#whoavatar').textContent=ME.name.split(' ').map(x=>x[0]).join('').slice(0,2);
+ buildNav();
+ $('#fab').classList.remove('hide');
+ show(ME.role==='Field Engineer'?'testing':'dashboard');
+ toast('Signed in as '+ME.name+' ('+ME.role+')');
+}
+function logout(){
+ stopScanner();
+ ME=null;CURRENT=null;
+ $('#fab').classList.add('hide');
+ $('#appview').classList.add('hide');
+ $('#loginview').classList.remove('hide');
+}
+function buildNav(){
+ $('#nav').innerHTML=NAV.map(g=>{
+  const items=g.items.filter(i=>i.roles.includes(ME.role));
+  if(!items.length)return '';
+  return `<div class="navsec">${g.sec}</div>`+items.map(i=>`<a data-view="${i.v}" onclick="show('${i.v}')"><span class="ico">${i.ico}</span>${i.label}</a>`).join('');
+ }).join('');
+}
+
+/* ============================================================
+   Router
+   ============================================================ */
+const VIEWS={};
+let CURRENT=null;
+function show(v){
+ if(!allowedViews().includes(v)){toast('Your role does not have access to that module');return;}
+ CURRENT=v;
+ $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===v));
+ const view=VIEWS[v];
+ $('#pagetitle').textContent=view.title;
+ $('#pagecrumb').textContent=view.crumb||'';
+ $('#content').innerHTML=view.render();
+ if(view.after)view.after();
+ applyMobile();
+ buildBottomBar();
+ toggleDrawer(false);
+ window.scrollTo(0,0);
+}
+function rerender(){if(CURRENT)show(CURRENT);}
+
+/* ============================================================
+   Mobile chrome — drawer, bottom bar, stacked tables
+   ============================================================ */
+const isMobile=()=>window.innerWidth<=900;
+function toggleDrawer(force){
+ const sb=document.querySelector('.sidebar'),sc=$('#scrim');
+ if(!sb)return;
+ const open=typeof force==='boolean'?force:!sb.classList.contains('open');
+ sb.classList.toggle('open',open);
+ sc.classList.toggle('on',open);
+}
+function applyMobile(){
+ const mob=isMobile();
+ $$('#content table').forEach(tb=>{
+  tb.classList.toggle('stack',mob);
+  if(!mob)return;
+  const heads=Array.from(tb.querySelectorAll('thead th')).map(th=>th.textContent.trim());
+  if(!heads.length)return;
+  Array.from(tb.querySelectorAll('tbody tr')).forEach(tr=>{
+   const tds=Array.from(tr.children);
+   if(tds.length===1&&tds[0].getAttribute('colspan')){tds[0].setAttribute('data-l','');return;}
+   tds.forEach((td,i)=>td.setAttribute('data-l',heads[i]||''));
+  });
+ });
+}
+const BOTTOM=[
+ {v:'testing',ico:'⌁',label:'Scan'},
+ {v:'dashboard',ico:'▦',label:'Status'},
+ {v:'myprojects',ico:'◈',label:'Projects'},
+ {v:'projects',ico:'◈',label:'Projects'},
+ {v:'register',ico:'▤',label:'Register'},
+ {v:'reports',ico:'⎙',label:'Reports'}
+];
+function buildBottomBar(){
+ if(!ME){$('#bottombar').innerHTML='';return;}
+ const allow=allowedViews();
+ const items=BOTTOM.filter(b=>allow.includes(b.v)).slice(0,5);
+ $('#bottombar').innerHTML=items.map(b=>`<a class="${CURRENT===b.v?'active':''}" onclick="show('${b.v}')">
+   <span class="bi">${b.ico}</span>${b.label}</a>`).join('')
+  +`<a onclick="toggleDrawer(true)"><span class="bi">☰</span>More</a>`;
+}
+window.addEventListener('resize',()=>{applyMobile();});
+window.addEventListener('orientationchange',()=>setTimeout(applyMobile,250));
+
+/* ============================================================
+   Blancco integration (laptops only)
+   ============================================================ */
+function hashCode(s){let h=0;for(let i=0;i<String(s).length;i++){h=(h<<5)-h+String(s).charCodeAt(i);h|=0;}return h;}
+const BLANCCO={
+ /* Live mode issues an authenticated request to <endpoint>?serial=<serial> on the
+    Blancco Management Console API and stores the returned erasure report against
+    the device. Demo mode synthesises an equivalent payload so the workflow can be
+    exercised end to end without credentials. */
+ async fetchBySerial(serial,category){
+  if(!isBlanccoCat(category))return {ok:false,error:'Blancco integration is restricted to Laptops. '+category+' uses the manual sanitization test parameter.'};
+  const cfg=DB.blanccoConfig;
+  if(cfg.mode==='Live'&&!cfg.apiKey)return {ok:false,error:'Live mode selected but no API key is configured (Masters → Blancco API).'};
+  await new Promise(r=>setTimeout(r,300));
+  if(/FAILSEED/i.test(serial)){
+   return {ok:true,report:{reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Failed',standard:'NIST 800-88 Rev.1 Purge',
+    software:'Blancco Drive Eraser 7.6',date:today(),verified:false,
+    drives:[{model:'Unknown',size:'—',result:'Failed — drive not detected'}],
+    operator:ME?ME.name:'system',source:cfg.mode,raw:'Erasure aborted: target drive reported SMART failure.'}};
+  }
+  const sizes=[['256 GB','NVMe SSD'],['512 GB','NVMe SSD'],['1 TB','NVMe SSD'],['500 GB','SATA HDD']];
+  const sz=sizes[Math.abs(hashCode(serial))%sizes.length];
+  return {ok:true,report:{
+   reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Erased',standard:'NIST 800-88 Rev.1 Purge',
+   software:'Blancco Drive Eraser 7.6',date:today(),verified:true,
+   drives:[{model:sz[1],size:sz[0],result:'Erasure successful — full verification passed'}],
+   operator:ME?ME.name:'system',source:cfg.mode,
+   raw:'All addressable sectors overwritten and verified. Hardware secure-erase issued where supported.'}};
+ }
+};
+async function pullBlancco(assetId,silent){
+ const a=DB.assets.find(x=>x.id===assetId);
+ if(!a)return;
+ if(!isBlanccoCat(a.category)){if(!silent)toast('Blancco applies to Laptops only — '+a.category+' uses the manual sanitization check');return;}
+ const res=await BLANCCO.fetchBySerial(a.serial,a.category);
+ if(!res.ok){toast(res.error);return;}
+ a.blancco=res.report;
+ const sp=paramsFor(a.category).find(p=>p.blancco);
+ if(sp){a.tests=a.tests||{};a.tests[sp.key]=res.report.status==='Erased'?'Pass':'Fail';}
+ a.history=a.history||[];
+ a.history.push({ts:stamp(),by:ME?ME.name:'system',ev:'Blancco report '+res.report.reportId+' linked ('+res.report.status+')'});
+ recomputeGrade(a);
+ rerender();
+ toast(a.serial+': Blancco '+res.report.reportId+' — '+res.report.status);
+}
+function recomputeGrade(a){const g=gradeAsset(a);a.grade=g.grade;a.gradeReason=g.reason;return g;}
+
+/* ============================================================
+   Demo asset seeding
+   ============================================================ */
+function mkAsset(pid,cat,brand,model,serial,cosmetic,status,tester,specs,overrides){
+ const a={id:genAssetId(),usn:genUSN(),projectId:pid,category:cat,brand:brand,model:model,serial:serial,
+  assetTag:'',cosmetic:cosmetic,status:status,tests:{},specs:specs||{},remarks:'',
+  testedBy:status==='Registered'?null:tester,testedAt:status==='Registered'?null:'2026-09-11',
+  verifiedBy:null,verifiedAt:null,blancco:null,
+  history:[{ts:'2026-09-10 09:15',by:userName(tester),ev:'Asset registered via barcode scan'}]};
+ if(status!=='Registered'){
+  paramsFor(cat).forEach(p=>{a.tests[p.key]=(overrides&&overrides[p.key])||'Pass';});
+  a.history.push({ts:'2026-09-11 11:30',by:userName(tester),ev:'Level-1 testing completed'});
+ }
+ if(status==='Verified'){a.verifiedBy='U-2';a.verifiedAt='2026-09-12';
+  a.history.push({ts:'2026-09-12 16:05',by:'S. Iyer',ev:'Verified by Super Admin'});}
+ if(isBlanccoCat(cat)&&status!=='Registered'){
+  a.blancco={reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Erased',standard:'NIST 800-88 Rev.1 Purge',
+   software:'Blancco Drive Eraser 7.6',date:'2026-09-10',verified:true,
+   drives:[{model:'NVMe SSD',size:'512 GB',result:'Erasure successful — full verification passed'}],
+   operator:userName(tester),source:'Demo (simulated)',raw:'All addressable sectors overwritten and verified.'};
+ }
+ recomputeGrade(a);
+ DB.assets.push(a);
+ return a;
+}
+mkAsset('PRJ-1001','Laptop','Dell','Latitude 5540','DL5540-88213','B','Verified','U-3',{Processor:'Intel Core i5-1335U',Generation:'13th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'15.6"',Year:'2023'});
+mkAsset('PRJ-1001','Laptop','Lenovo','ThinkPad T14 G4','LT14-30291','A','Verified','U-3',{Processor:'Intel Core i7-1355U',Generation:'13th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'14"',Year:'2023'});
+mkAsset('PRJ-1001','Laptop','HP','ProBook 450 G8','PB450-20115','C','Tested','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'},{battery:'Fail',webcam:'Fail'});
+mkAsset('PRJ-1001','Laptop','Dell','Latitude 7420','DL7420-61008','B','Tested','U-3',{Processor:'Intel Core i7-1185G7',Generation:'11th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'14"',Year:'2021'});
+mkAsset('PRJ-1001','Desktop','HP','EliteDesk 800 G9','HP800-11750','B','Verified','U-4',{Processor:'Intel Core i7-12700',Generation:'12th Gen',RAM:'16 GB',Storage:'512 GB SSD','Form Factor':'SFF',Year:'2022'});
+mkAsset('PRJ-1001','Desktop','Dell','OptiPlex 7010','OP7010-3312','C','Tested','U-4',{Processor:'Intel Core i5-13500',Generation:'13th Gen',RAM:'8 GB',Storage:'256 GB SSD','Form Factor':'MT',Year:'2023'},{gpu:'Fail'});
+mkAsset('PRJ-1001','Monitor','Dell','P2422H','MON-55910','A','Verified','U-3',{'Screen Size':'24"','Panel Type':'IPS',Resolution:'1920x1080',Year:'2022'});
+mkAsset('PRJ-1001','Monitor','HP','E24 G5','MON-88123','B','Tested','U-3',{'Screen Size':'24"','Panel Type':'IPS',Resolution:'1920x1080',Year:'2021'},{stand:'Fail',cables:'Fail'});
+mkAsset('PRJ-1001','Thin Client','Dell','Wyse 5070','WY5070-2201','B','Registered','U-4',{});
+mkAsset('PRJ-1001','Laptop','Acer','TravelMate P4','TMP4-77001','B','Registered','U-3',{});
+mkAsset('PRJ-1002','Laptop','Apple','MacBook Pro 14 M2','MBP14-77821','A','Tested','U-5',{Processor:'Apple M2 Pro',Generation:'M2',RAM:'16 GB',Storage:'512 GB SSD','Screen Size':'14.2"',Year:'2023'});
+mkAsset('PRJ-1002','Server','HPE','ProLiant DL380 G10','DL380-55671','B','Tested','U-5',{'Form Factor':'2U Rack',Processor:'2x Xeon Gold 5218','CPU Count':'2',RAM:'256 GB ECC','Drive Config':'8x 1.8TB SAS',RAID:'P408i-a',PSU:'Dual 800W',Year:'2019'});
+mkAsset('PRJ-1002','Server','Dell','PowerEdge R650','PE650-00412','B','Registered','U-5',{});
+mkAsset('PRJ-1002','Switch','Cisco','Catalyst 9300','CAT93-00291','A','Tested','U-3',{'Port Count':'48',Speed:'1G/10G uplink',PoE:'PoE+',Stackable:'Yes',Firmware:'IOS-XE 17.9',Year:'2020'});
+mkAsset('PRJ-1002','Switch','Cisco','Catalyst 2960X','CAT29-11832','C','Tested','U-3',{'Port Count':'24',Speed:'1G',PoE:'No',Stackable:'Yes',Firmware:'IOS 15.2',Year:'2016'},{poe:'N/A',fans:'Fail',stack:'Fail'});
+mkAsset('PRJ-1002','Monitor','LG','24MK600','LG24-55521','B','Registered','U-5',{});
+mkAsset('PRJ-1003','Laptop','Lenovo','ThinkPad E15','LE15-11002','B','Verified','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'});
+mkAsset('PRJ-1003','Laptop','Lenovo','ThinkPad E15','LE15-11003','C','Verified','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'});
+mkAsset('PRJ-1003','Tiny PC','Intel','NUC 11 Pro','NUC11-9087','A','Verified','U-4',{Processor:'Intel Core i5-1145G7',Generation:'11th Gen',RAM:'16 GB',Storage:'512 GB NVMe',Year:'2021'});
+(function(){
+ const rej=DB.assets.find(a=>a.serial==='OP7010-3312');
+ rej.status='Rejected';rej.rejectNote='Graphics output failed — re-seat GPU and retest before verification.';
+ rej.history.push({ts:'2026-09-12 16:20',by:'S. Iyer',ev:'Rejected at verification: graphics output failed'});
+})();
+DB.manifests.push({id:'MF-1',projectId:'PRJ-1001',uploaded:'2026-09-12',by:'U-1',file:'meridian_received_manifest.csv',
+ rows:[{serial:'DL5540-88213',category:'Laptop',brand:'Dell',model:'Latitude 5540'},
+  {serial:'LT14-30291',category:'Laptop',brand:'Lenovo',model:'ThinkPad T14 G4'},
+  {serial:'PB450-20115',category:'Laptop',brand:'HP',model:'ProBook 450 G8'},
+  {serial:'DL7420-61008',category:'Laptop',brand:'Dell',model:'Latitude 7420'},
+  {serial:'HP800-11750',category:'Desktop',brand:'HP',model:'EliteDesk 800 G9'},
+  {serial:'OP7010-3312',category:'Desktop',brand:'Dell',model:'OptiPlex 7010'},
+  {serial:'MON-55910',category:'Monitor',brand:'Dell',model:'P2422H'},
+  {serial:'MON-88123',category:'Monitor',brand:'HP',model:'E24 G5'},
+  {serial:'WY5070-2201',category:'Thin Client',brand:'Dell',model:'Wyse 5070'},
+  {serial:'TMP4-77001',category:'Laptop',brand:'Acer',model:'TravelMate P4'},
+  {serial:'MON-99001',category:'Monitor',brand:'Dell',model:'P2419H'},
+  {serial:'WY5070-2202',category:'Thin Client',brand:'Dell',model:'Wyse 5070'}]});
+
+/* ============================================================
+   SCAN & TEST  (Field Engineer + Super Admin)
+   ============================================================ */
+let ACTIVE_PROJECT=null;
+let TEST_FILTER='open';
+VIEWS.testing={title:'Scan &amp; Test',crumb:'Barcode or serial entry, category test parameters, grading',
+render(){
+ const projs=myProjects().filter(p=>['Active','Planned'].includes(p.status));
+ if(!projs.length)return '<div class="warn">No active projects are assigned to you. A Super Admin needs to create a project and add you to its team.</div>';
+ if(!ACTIVE_PROJECT||!projs.some(p=>p.id===ACTIVE_PROJECT))ACTIVE_PROJECT=projs[0].id;
+ const p=projectById(ACTIVE_PROJECT);
+ const mine=DB.assets.filter(a=>a.projectId===p.id);
+ const open=mine.filter(a=>['Registered','In Testing','Rejected'].includes(a.status));
+ const done=mine.filter(a=>['Tested','Verified'].includes(a.status));
+ const list=TEST_FILTER==='open'?open:TEST_FILTER==='done'?done:mine;
+ const rows=list.slice().reverse().map(a=>{
+  const pr=testProgress(a);
+  return `<tr>
+   <td><b>${esc(a.serial)}</b><div class="muted" style="font-size:11px">${esc(a.usn)}</div></td>
+   <td>${esc(a.category)}<div class="muted" style="font-size:11px">${esc(a.brand)} ${esc(a.model)}</div></td>
+   <td>${badge(a.status)}${a.status==='Rejected'?'<div class="muted" style="font-size:11px;max-width:200px">'+esc(a.rejectNote||'')+'</div>':''}</td>
+   <td style="min-width:120px"><div class="progressbar"><div style="width:${pr.pct}%"></div></div><span class="muted" style="font-size:11px">${pr.done}/${pr.total}</span></td>
+   <td>${a.grade?badge(a.grade):'—'}</td>
+   <td>${isBlanccoCat(a.category)?(a.blancco?badge(a.blancco.status):'<span class="muted" style="font-size:11px">not pulled</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
+   <td class="flex">
+     <button class="btn btn-sm btn-p" onclick="openTest('${a.id}')">${pr.done?'Continue':'Start'} Test</button>
+     <button class="btn btn-sm" onclick="assetLabel('${a.id}')">Label</button>
+   </td></tr>`;
+ }).join('');
+ const scopeChips=p.scope.map(s=>{
+  const n=mine.filter(a=>a.category===s.category).length;
+  return `<span class="tag">${esc(s.category)}: ${n}/${s.expected}</span>`;
+ }).join('');
+ return `
+ <div class="scanbox">
+  <div class="flex" style="justify-content:space-between;margin-bottom:10px">
+   <div style="font-weight:600;font-size:15px">⌁ Scan or key in a serial number</div>
+   <select id="projsel" onchange="ACTIVE_PROJECT=this.value;rerender()" style="max-width:340px">
+     ${projs.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.id)} — ${esc(x.name)}</option>`).join('')}
+   </select>
+  </div>
+  <button class="btn btn-p" style="width:100%;justify-content:center;padding:14px;font-size:15px;margin-bottom:10px"
+    onclick="cameraScan()">📷 Scan with camera</button>
+  <div class="flex">
+   <input id="scanin" placeholder="…or type / gun-scan the serial" autocomplete="off" autocapitalize="characters"
+     autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go"
+     onkeydown="if(event.key==='Enter')doScan()" style="flex:1;min-width:180px">
+   <button class="btn btn-p" onclick="doScan()">Enter</button>
+  </div>
+  <div class="hint">Camera scanning reads Code-128, Code-39, EAN, UPC and QR — use <b>Batch</b> mode to register a whole trolley without stopping. USB / Bluetooth barcode guns also work: they type the serial and press Enter. Known serials open the saved test sheet, new ones open registration.</div>
+ </div>
+ <div class="card" style="margin-top:18px"><div class="card-h">
+   <h3>${esc(p.name)} <span class="muted" style="font-weight:400">· ${esc(clientName(p.clientId))} · ${esc(p.site)}</span></h3>
+   <div class="flex">${scopeChips}</div></div>
+   <div class="card-b" style="padding-bottom:0">
+     <div class="statgrid" style="margin-bottom:14px">
+       <div class="stat"><div class="v">${mine.length}</div><div class="l">Captured</div></div>
+       <div class="stat"><div class="v" style="color:var(--amber)">${open.length}</div><div class="l">Open</div></div>
+       <div class="stat"><div class="v" style="color:var(--purple)">${mine.filter(a=>a.status==='Tested').length}</div><div class="l">Tested</div></div>
+       <div class="stat"><div class="v" style="color:var(--green)">${mine.filter(a=>a.status==='Verified').length}</div><div class="l">Verified</div></div>
+       <div class="stat"><div class="v" style="color:var(--red)">${mine.filter(a=>a.status==='Rejected').length}</div><div class="l">Rejected</div></div>
+     </div>
+     <div class="subtabs" style="margin-bottom:0">
+       <div class="subtab ${TEST_FILTER==='open'?'active':''}" onclick="TEST_FILTER='open';rerender()">Open (${open.length})</div>
+       <div class="subtab ${TEST_FILTER==='done'?'active':''}" onclick="TEST_FILTER='done';rerender()">Completed (${done.length})</div>
+       <div class="subtab ${TEST_FILTER==='all'?'active':''}" onclick="TEST_FILTER='all';rerender()">All (${mine.length})</div>
+     </div>
+   </div>
+   <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Asset</th><th>Status</th><th>Test progress</th><th>Grade</th><th>Blancco</th><th>Action</th></tr></thead>
+   <tbody>${rows||'<tr><td colspan=7 class="muted">Nothing here yet — scan a serial above to register the first asset.</td></tr>'}</tbody></table></div></div>`;
+},
+after(){const el=$('#scanin');if(el)el.focus();}};
+
+function doScan(){
+ const el=$('#scanin');
+ const serial=String(el.value||'').trim();
+ if(!serial){toast('Scan or type a serial number first');return;}
+ el.value='';
+ const existing=DB.assets.find(a=>a.serial.toLowerCase()===serial.toLowerCase()||String(a.usn).toLowerCase()===serial.toLowerCase());
+ if(existing){
+  if(ME.role==='Field Engineer'&&!myProjectIds().includes(existing.projectId)){
+   toast(serial+' belongs to '+existing.projectId+', which is not assigned to you');return;
+  }
+  ACTIVE_PROJECT=existing.projectId;
+  openTest(existing.id);
+  return;
+ }
+ registerAsset(serial);
+}
+let SCANNER=null,SCAN_CAMS=[],SCAN_IDX=0,SCAN_MODE='single',SCAN_LAST='',SCAN_LAST_T=0,SCAN_HITS=[],SCAN_TORCH=false;
+function scannerAvailable(){return typeof Html5Qrcode!=='undefined';}
+function secureCtxOK(){
+ try{return window.isSecureContext||location.protocol==='https:'||location.hostname==='localhost'||location.protocol==='file:';}
+ catch(e){return false;}
+}
+function beep(){
+ try{
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  const ctx=new C(),o=ctx.createOscillator(),g=ctx.createGain();
+  o.type='square';o.frequency.value=1760;g.gain.value=.06;
+  o.connect(g);g.connect(ctx.destination);o.start();
+  setTimeout(()=>{o.stop();ctx.close();},110);
+ }catch(e){}
+}
+function buzz(){try{if(navigator.vibrate)navigator.vibrate(45);}catch(e){}}
+function scanFormats(){
+ if(typeof Html5QrcodeSupportedFormats==='undefined')return undefined;
+ const F=Html5QrcodeSupportedFormats;
+ return [F.CODE_128,F.CODE_39,F.CODE_93,F.CODABAR,F.ITF,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.QR_CODE,F.DATA_MATRIX];
+}
+async function cameraScan(){
+ if(!ME)return;
+ if(CURRENT!=='testing'){show('testing');}
+ if(!scannerAvailable()){
+  toast('Scanner library did not load — check your connection, or type the serial into the scan box');return;
+ }
+ if(!secureCtxOK()){
+  toast('Camera needs a secure (https) page. Open the hosted link on your phone, or use a barcode gun / manual entry.');return;
+ }
+ SCAN_HITS=[];SCAN_LAST='';SCAN_TORCH=false;
+ openModal(scannerHTML(),true);
+ try{
+  SCAN_CAMS=await Html5Qrcode.getCameras();
+ }catch(e){
+  $('#scanstatus').innerHTML='<div class="errbox">Camera permission denied or unavailable.<br><span style="font-size:12px">Allow camera access in your browser settings, then try again. You can still type serials manually.</span></div>';
+  return;
+ }
+ if(!SCAN_CAMS||!SCAN_CAMS.length){
+  $('#scanstatus').innerHTML='<div class="errbox">No camera found on this device.</div>';return;
+ }
+ SCAN_IDX=SCAN_CAMS.findIndex(c=>/back|rear|environment/i.test(c.label||''));
+ if(SCAN_IDX<0)SCAN_IDX=SCAN_CAMS.length-1;
+ await startScanner();
+}
+function scannerHTML(){
+ const p=projectById(ACTIVE_PROJECT)||{scope:[]};
+ const cats=(p.scope||[]).map(x=>x.category);
+ return `
+ <div class="modal-h"><h3>⌁ Scan barcode</h3><button class="x" onclick="stopScanner();closeModal()">×</button></div>
+ <div class="modal-b">
+   <div class="scanwrap"><div id="scanregion"></div>
+     <div class="scanguide"><i></i></div><div class="scanline"></div></div>
+   <div id="scanstatus" style="margin-top:10px"></div>
+   <div class="flex" style="margin-top:10px">
+     <button class="btn btn-sm" onclick="flipCamera()">🔄 Flip camera</button>
+     <button class="btn btn-sm" id="torchbtn" onclick="toggleTorch()">🔦 Torch</button>
+     <button class="btn btn-sm" onclick="stopScanner();closeModal();focusScanInput()">⌨ Type instead</button>
+   </div>
+   <label class="f" style="margin-top:14px">Scan mode</label>
+   <div class="seg" style="width:100%">
+     <button class="${SCAN_MODE==='single'?'on-pass':''}" onclick="setScanMode('single')">Single — open the asset</button>
+     <button class="${SCAN_MODE==='batch'?'on-pass':''}" onclick="setScanMode('batch')">Batch — quick capture</button>
+   </div>
+   <div id="batchopts" class="${SCAN_MODE==='batch'?'':'hide'}">
+     <label class="f">Register batch scans as</label>
+     <select id="batchcat">${(cats.length?cats:DB.categories).map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+     <div class="muted" style="font-size:12px;margin-top:6px">Each scan is registered instantly against ${esc(ACTIVE_PROJECT||'')} with this category, ready to test later. Keep scanning without stopping.</div>
+   </div>
+   <div id="scanhits" class="scanhits" style="margin-top:12px"></div>
+ </div>
+ <div class="modal-f">
+   <button class="btn" onclick="stopScanner();closeModal()">Close</button>
+   <button class="btn btn-p" onclick="stopScanner();closeModal();rerender()">Done</button>
+ </div>`;
+}
+function setScanMode(m){
+ SCAN_MODE=m;
+ $$('#modalbox .seg button').forEach((b,i)=>b.className=((i===0&&m==='single')||(i===1&&m==='batch'))?'on-pass':'');
+ const bo=$('#batchopts');if(bo)bo.classList.toggle('hide',m!=='batch');
+}
+async function startScanner(){
+ const st=$('#scanstatus');
+ try{
+  SCANNER=new Html5Qrcode('scanregion',{formatsToSupport:scanFormats(),verbose:false});
+  const cfg={fps:12,aspectRatio:1.4,
+    qrbox:(w,h)=>({width:Math.floor(Math.min(w,h)*0.86),height:Math.floor(Math.min(w,h)*0.42)}),
+    experimentalFeatures:{useBarCodeDetectorIfSupported:true}};
+  await SCANNER.start({deviceId:{exact:SCAN_CAMS[SCAN_IDX].id}},cfg,onScanHit,()=>{});
+  if(st)st.innerHTML='<div class="okbox" style="margin:0">📷 Camera live — hold the barcode inside the frame. Code-128, Code-39, EAN, UPC and QR are supported.</div>';
+ }catch(e){
+  if(st)st.innerHTML='<div class="errbox" style="margin:0">Could not start the camera: '+esc(e.message||e)+'<br><span style="font-size:12px">Try Flip camera, or type the serial instead.</span></div>';
+ }
+}
+async function stopScanner(){
+ if(!SCANNER)return;
+ try{await SCANNER.stop();SCANNER.clear();}catch(e){}
+ SCANNER=null;
+}
+async function flipCamera(){
+ if(!SCAN_CAMS.length)return;
+ SCAN_IDX=(SCAN_IDX+1)%SCAN_CAMS.length;
+ await stopScanner();
+ await startScanner();
+ toast('Camera: '+(SCAN_CAMS[SCAN_IDX].label||('#'+(SCAN_IDX+1))));
+}
+async function toggleTorch(){
+ if(!SCANNER){toast('Start the camera first');return;}
+ try{
+  SCAN_TORCH=!SCAN_TORCH;
+  await SCANNER.applyVideoConstraints({advanced:[{torch:SCAN_TORCH}]});
+  const b=$('#torchbtn');if(b)b.className='btn btn-sm'+(SCAN_TORCH?' btn-p':'');
+ }catch(e){toast('Torch is not available on this camera');SCAN_TORCH=false;}
+}
+function parseScanPayload(text){
+ const raw=String(text||'').trim();
+ const parts=raw.split('|');
+ return parts.length>=2?parts[1].trim():raw;   /* our labels are USN|Serial|Category */
+}
+function onScanHit(text){
+ const serial=parseScanPayload(text);
+ const now=Date.now();
+ if(serial===SCAN_LAST&&now-SCAN_LAST_T<2000)return;   /* debounce repeat frames */
+ SCAN_LAST=serial;SCAN_LAST_T=now;
+ beep();buzz();
+ if(SCAN_MODE==='single'){
+  stopScanner();closeModal();
+  const el=$('#scanin');if(el)el.value=serial;
+  doScan();
+  return;
+ }
+ batchCapture(serial);
+}
+function batchCapture(serial){
+ const existing=DB.assets.find(a=>a.serial.toLowerCase()===serial.toLowerCase()||String(a.usn).toLowerCase()===serial.toLowerCase());
+ if(existing){
+  SCAN_HITS.unshift({serial:serial,note:'already captured ('+existing.status+')',ok:false});
+  paintHits();return;
+ }
+ const cat=($('#batchcat')&&$('#batchcat').value)||DB.categories[0];
+ const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,brand:'—',model:'—',serial:serial,
+  assetTag:'',cosmetic:'B',status:'Registered',tests:{},specs:{},remarks:'',
+  testedBy:null,testedAt:null,verifiedBy:null,verifiedAt:null,blancco:null,
+  history:[{ts:stamp(),by:ME.name,ev:'Quick-captured by camera scan (batch mode)'}]};
+ recomputeGrade(a);
+ DB.assets.push(a);
+ SCAN_HITS.unshift({serial:serial,note:a.usn+' · '+cat,ok:true});
+ paintHits();
+ if(isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlanccoQuiet(a.id);
+}
+function pullBlanccoQuiet(id){try{pullBlancco(id,true);}catch(e){}}
+function paintHits(){
+ const el=$('#scanhits');if(!el)return;
+ const ok=SCAN_HITS.filter(h=>h.ok).length;
+ el.innerHTML='<div style="font-weight:600;border:none;padding:4px 8px">Captured this session: '+ok+'</div>'+
+  SCAN_HITS.slice(0,25).map(h=>`<div><span>${h.ok?'✅':'⚠️'} <b>${esc(h.serial)}</b></span><span class="muted">${esc(h.note)}</span></div>`).join('');
+}
+function focusScanInput(){
+ const el=$('#scanin');
+ if(el){el.focus();try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}}
+}
+function registerAsset(serial){
+ const p=projectById(ACTIVE_PROJECT);
+ const cats=p.scope.length?p.scope.map(s=>s.category):DB.categories;
+ openModal(`
+ <div class="modal-h"><h3>➕ Register asset — ${esc(serial)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+   <div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given an Urbeno USN.</div>
+   <div class="frow">
+     <div><label class="f">Serial number (scanned)</label><input id="ra_serial" value="${esc(serial)}"></div>
+     <div><label class="f">Category</label><select id="ra_cat" onchange="raSpecs()">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
+   </div>
+   <div class="frow">
+     <div><label class="f">Brand</label><input id="ra_brand" placeholder="Dell / HP / Lenovo"></div>
+     <div><label class="f">Model</label><input id="ra_model" placeholder="Latitude 5540"></div>
+   </div>
+   <div class="frow">
+     <div><label class="f">Client asset tag (optional)</label><input id="ra_tag" placeholder="MERI-IT-00231"></div>
+     <div><label class="f">Cosmetic grade</label><select id="ra_cos"><option value="A">A — Like new</option><option value="B" selected>B — Light wear</option><option value="C">C — Visible wear</option><option value="D">D — Damaged</option></select></div>
+   </div>
+   <div id="ra_specs"></div>
+   <label class="f">Remarks (optional)</label><textarea id="ra_rem" rows="2" maxlength="500"></textarea>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+   <button class="btn btn-p" onclick="saveRegister()">Register &amp; start test</button></div>`);
+ raSpecs();
+}
+function raSpecs(){
+ const cat=$('#ra_cat').value;
+ $('#ra_specs').innerHTML='<label class="f" style="margin-top:12px">Technical specifications — '+esc(cat)+'</label><div class="frow3">'+
+  specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="ras_${i}" data-f="${esc(f)}"></div>`).join('')+'</div>';
+}
+function saveRegister(){
+ const serial=String($('#ra_serial').value||'').trim();
+ if(!serial){toast('Serial number is required');return;}
+ if(DB.assets.some(a=>a.serial.toLowerCase()===serial.toLowerCase())){toast('Serial '+serial+' already exists in the register');return;}
+ const cat=$('#ra_cat').value;
+ const specs={};$$('#ra_specs input').forEach(el=>{if(el.value)specs[el.dataset.f]=el.value;});
+ const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,
+  brand:$('#ra_brand').value||'—',model:$('#ra_model').value||'—',serial:serial,
+  assetTag:$('#ra_tag').value||'',cosmetic:$('#ra_cos').value,status:'In Testing',
+  tests:{},specs:specs,remarks:String($('#ra_rem').value||'').slice(0,500),
+  testedBy:ME.id,testedAt:null,verifiedBy:null,verifiedAt:null,blancco:null,
+  history:[{ts:stamp(),by:ME.name,ev:'Asset registered via scan ('+serial+')'}]};
+ recomputeGrade(a);
+ DB.assets.push(a);
+ closeModal();rerender();
+ toast('Registered '+serial+' as '+a.usn);
+ openTest(a.id);
+ if(isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlancco(a.id,true);
+}
+
+/* ---------- Test sheet ---------- */
+let TESTING_ID=null;
+function openTest(id){
+ const a=DB.assets.find(x=>x.id===id);
+ if(!a)return;
+ TESTING_ID=id;
+ if(a.status==='Registered'){a.status='In Testing';a.history.push({ts:stamp(),by:ME.name,ev:'Testing started'});}
+ const params=paramsFor(a.category);
+ const locked=a.status==='Verified'&&ME.role!=='Super Admin';
+ const rows=params.map(p=>{
+  const v=a.tests[p.key]||'';
+  const isB=p.blancco&&isBlanccoCat(a.category);
+  return `<div class="testrow">
+   <div><div class="nm">${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</div>
+    ${isB?`<div class="muted" style="font-size:11px">Auto-filled from the Blancco report — ${a.blancco?'report '+esc(a.blancco.reportId)+' ('+esc(a.blancco.status)+')':'no report linked yet'}</div>`:''}
+    ${p.measure?`<input style="max-width:180px;margin-top:5px;padding:5px 8px;font-size:12px" placeholder="${esc(p.measure)}" value="${esc((a.measures||{})[p.key]||'')}" oninput="setMeasure('${p.key}',this.value)">`:''}
+   </div>
+   <div class="seg">
+    <button class="${v==='Pass'?'on-pass':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','Pass')">Pass</button>
+    <button class="${v==='Fail'?'on-fail':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','Fail')">Fail</button>
+    <button class="${v==='N/A'?'on-na':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','N/A')">N/A</button>
+   </div></div>`;
+ }).join('');
+ const g=gradeAsset(a);
+ const pr=testProgress(a);
+ const gcol={A:'var(--green)',B:'var(--blue)',C:'var(--amber)',D:'var(--red)'}[g.grade];
+ openModal(`
+ <div class="modal-h"><h3>⌁ ${esc(a.serial)} — ${esc(a.category)} ${badge(a.status)}</h3><button class="x" onclick="closeModal();rerender()">×</button></div>
+ <div class="modal-b">
+   <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''}</div>
+   ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by Super Admin:</b> ${esc(a.rejectNote||'')}</div>`:''}
+   ${isBlanccoCat(a.category)?(a.blancco
+     ? `<div class="${a.blancco.status==='Erased'?'okbox':'errbox'}">🛡 Blancco <b>${esc(a.blancco.reportId)}</b> — ${esc(a.blancco.status)} · ${esc(a.blancco.standard)} · ${esc(a.blancco.date)}
+         <button class="btn btn-sm" style="margin-left:8px" onclick="viewBlancco('${a.id}')">View report</button>
+         <button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Re-pull</button></div>`
+     : `<div class="warn">🛡 No Blancco erasure report linked. Laptops cannot be submitted without one.
+         <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="pullBlancco('${a.id}')">Pull from Blancco API</button></div>`)
+    : `<div class="info">🛡 Blancco is configured for Laptops only — sanitization for ${esc(a.category)} is recorded manually in the checklist below.</div>`}
+   <div class="flex" style="margin-bottom:10px">
+     <div style="flex:1;min-width:160px"><div class="progressbar"><div style="width:${pr.pct}%"></div></div>
+       <span class="muted" style="font-size:11px">${pr.done} of ${pr.total} parameters recorded</span></div>
+     <button class="btn btn-sm" onclick="markAllPass('${a.id}')">✓ All pass</button>
+   </div>
+   <div class="grid2">
+     <div>
+       <label class="f">Test parameters (${pr.done}/${pr.total} recorded)</label>
+       <div style="border:1px solid var(--line);border-radius:9px;padding:4px 12px">${rows}</div>
+     </div>
+     <div>
+       <label class="f">Cosmetic grade</label>
+       <select id="t_cos" onchange="setCosmetic(this.value)">
+         ${['A','B','C','D'].map(c=>`<option value="${c}" ${a.cosmetic===c?'selected':''}>${c} — ${({A:'Like new',B:'Light wear',C:'Visible wear',D:'Damaged'})[c]}</option>`).join('')}
+       </select>
+       <label class="f">Computed quality grade</label>
+       <div style="border:1px solid var(--line);border-radius:9px">
+         <div class="gradebox" style="color:${gcol}">${g.grade}</div>
+         <div class="muted" style="font-size:12px;padding:0 12px 12px;text-align:center">${esc(g.reason)}</div>
+       </div>
+       <label class="f">Engineer remarks (500 chars)</label>
+       <textarea id="t_rem" rows="4" maxlength="500" oninput="setRemarks(this.value)">${esc(a.remarks||'')}</textarea>
+       <label class="f">Specifications</label>
+       <div style="font-size:12px">${Object.entries(a.specs||{}).map(([k,v])=>'<span class="tag">'+esc(k)+': '+esc(v)+'</span>').join('')||'<span class="muted">None captured — </span>'}
+         <button class="btn btn-sm" onclick="editSpecs('${a.id}')">Edit specs</button></div>
+     </div>
+   </div>
+ </div>
+ <div class="modal-f">
+   <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
+   <button class="btn" onclick="closeModal();rerender()">Close</button>
+   ${a.status==='Tested'||a.status==='Verified'?'':`<button class="btn btn-p" onclick="submitTest('${a.id}')">Submit for verification</button>`}
+ </div>`,true);
+}
+function setTest(key,val){
+ const a=DB.assets.find(x=>x.id===TESTING_ID);
+ a.tests[key]=a.tests[key]===val?'':val;
+ recomputeGrade(a);
+ openTest(a.id);
+}
+function markAllPass(id){
+ const a=DB.assets.find(x=>x.id===id);
+ const bp=paramsFor(a.category).find(p=>p.blancco);
+ paramsFor(a.category).forEach(p=>{
+  if(p.blancco&&isBlanccoCat(a.category))return;   /* Blancco parameter is API-owned */
+  a.tests[p.key]='Pass';
+ });
+ recomputeGrade(a);openTest(a.id);
+ toast('All parameters marked Pass'+(bp&&isBlanccoCat(a.category)?' — sanitization still comes from Blancco':'')+'. Change any that failed.');
+}
+function setMeasure(key,val){
+ const a=DB.assets.find(x=>x.id===TESTING_ID);
+ a.measures=a.measures||{};a.measures[key]=val;
+}
+function setCosmetic(v){
+ const a=DB.assets.find(x=>x.id===TESTING_ID);
+ a.cosmetic=v;recomputeGrade(a);openTest(a.id);
+}
+function setRemarks(v){
+ const a=DB.assets.find(x=>x.id===TESTING_ID);
+ a.remarks=String(v||'').slice(0,500);
+}
+function editSpecs(id){
+ const a=DB.assets.find(x=>x.id===id);
+ openModal(`<div class="modal-h"><h3>Specifications — ${esc(a.serial)}</h3><button class="x" onclick="openTest('${id}')">×</button></div>
+ <div class="modal-b"><div class="frow">
+  ${specsFor(a.category).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="es_${i}" data-f="${esc(f)}" value="${esc((a.specs||{})[f]||'')}"></div>`).join('')}
+ </div></div>
+ <div class="modal-f"><button class="btn" onclick="openTest('${id}')">Back</button>
+  <button class="btn btn-p" onclick="saveSpecs('${id}')">Save specs</button></div>`);
+}
+function saveSpecs(id){
+ const a=DB.assets.find(x=>x.id===id);
+ a.specs=a.specs||{};
+ $$('#modalbox input[data-f]').forEach(el=>{if(el.value)a.specs[el.dataset.f]=el.value;else delete a.specs[el.dataset.f];});
+ toast('Specifications saved');
+ openTest(id);
+}
+function submitTest(id){
+ const a=DB.assets.find(x=>x.id===id);
+ const pr=testProgress(a);
+ if(pr.done<pr.total){toast('Record all '+pr.total+' test parameters before submitting ('+pr.done+' done)');return;}
+ if(blanccoRequired(a)&&!blanccoOK(a)){toast('Laptops need a successful Blancco erasure report before submission — pull it from the API first');return;}
+ a.status='Tested';a.testedBy=ME.id;a.testedAt=today();
+ recomputeGrade(a);
+ a.history.push({ts:stamp(),by:ME.name,ev:'Submitted for verification — grade '+a.grade});
+ closeModal();rerender();
+ toast(a.serial+' submitted — grade '+a.grade+'. Awaiting Super Admin verification.');
+}
+function assetLabel(id){
+ const a=DB.assets.find(x=>x.id===id);
+ showLabels([a],'Label — '+a.serial);
+}
+function showLabels(list,title){
+ const labels=list.map(a=>`<div class="bclabel">
+   <svg class="bcsvg" data-code="${esc(a.usn+'|'+a.serial+'|'+a.category)}"></svg>
+   <div class="bctxt"><b>${esc(a.usn)}</b><br>SN: ${esc(a.serial)}<br>${esc(a.category)} · ${esc(a.brand)} ${esc(a.model)}<br>${esc(a.projectId)}${a.grade?' · Grade '+a.grade:''}</div>
+ </div>`).join('');
+ openModal(`<div class="modal-h"><h3>🏷 ${esc(title)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b"><div class="muted" style="font-size:12px;margin-bottom:10px">Code-128 · payload <span class="tag">USN | Serial | Category</span> — scans straight back into this app.</div>
+ <div class="bcgrid" id="bcgrid">${labels}</div></div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Close</button><button class="btn btn-p" onclick="printLabels()">🖨 Print</button></div>`,true);
+ renderBarcodes();
+}
+function renderBarcodes(){
+ if(typeof JsBarcode==='undefined'){toast('Barcode library unavailable offline');return;}
+ $$('.bcsvg').forEach(el=>{try{JsBarcode(el,el.dataset.code,{format:'CODE128',height:34,width:1.1,displayValue:false,margin:2});}catch(e){}});
+}
+function printLabels(){
+ const g=$('#bcgrid');if(!g)return;
+ const w=window.open('','_blank');
+ if(!w){toast('Popup blocked — allow popups to print labels');return;}
+ w.document.write('<html><head><title>CircuitLoop labels</title><style>body{font-family:Segoe UI,Arial;margin:10mm}.bcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}.bclabel{border:1px dashed #999;border-radius:4px;padding:6px;text-align:center;page-break-inside:avoid}.bctxt{font-size:10px;line-height:1.5}svg{max-width:100%}</style></head><body>'+g.outerHTML+'</body></html>');
+ w.document.close();w.focus();setTimeout(()=>w.print(),300);
+}
+function viewBlancco(id){
+ const a=DB.assets.find(x=>x.id===id);
+ const b=a.blancco;
+ if(!b){toast('No Blancco report linked');return;}
+ openModal(`<div class="modal-h"><h3>🛡 Blancco erasure report ${esc(b.reportId)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div class="${b.status==='Erased'?'okbox':'errbox'}">Status: <b>${esc(b.status)}</b>${b.verified?' · verification passed':' · verification failed'}</div>
+  <table>
+   <tr><th>Device serial</th><td>${esc(b.serial)}</td></tr>
+   <tr><th>Asset / USN</th><td>${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)}</td></tr>
+   <tr><th>Erasure standard</th><td>${esc(b.standard)}</td></tr>
+   <tr><th>Software</th><td>${esc(b.software)}</td></tr>
+   <tr><th>Report date</th><td>${esc(b.date)}</td></tr>
+   <tr><th>Operator</th><td>${esc(b.operator)}</td></tr>
+   <tr><th>Source</th><td>${esc(b.source)}</td></tr>
+   <tr><th>Drives</th><td>${b.drives.map(d=>esc(d.size+' '+d.model+' — '+d.result)).join('<br>')}</td></tr>
+   <tr><th>Notes</th><td>${esc(b.raw)}</td></tr>
+  </table>
+  <div class="muted" style="font-size:11px;margin-top:10px">Stored against the device record and included in the project data-security report. Retained for audit.</div>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Close</button>
+  <button class="btn" onclick="downloadBlancco('${a.id}')">⬇ Download JSON</button></div>`);
+}
+function downloadBlancco(id){
+ const a=DB.assets.find(x=>x.id===id);
+ const blob=new Blob([JSON.stringify({asset:{usn:a.usn,serial:a.serial,category:a.category,brand:a.brand,model:a.model},report:a.blancco},null,2)],{type:'application/json'});
+ const el=document.createElement('a');el.href=URL.createObjectURL(blob);el.download='blancco_'+a.blancco.reportId+'.json';el.click();
+ toast('Report JSON downloaded');
+}
+
+/* ---------- Field engineer: my projects ---------- */
+VIEWS.myprojects={title:'My Projects',crumb:'Projects assigned to you',
+render(){
+ const ps=myProjects();
+ return `<div class="card"><div class="card-h"><h3>Assigned projects</h3></div>
+ <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client / Site</th><th>Window</th><th>Status</th><th>My captures</th><th>Progress</th><th></th></tr></thead>
+ <tbody>${ps.map(p=>{
+  const all=DB.assets.filter(a=>a.projectId===p.id);
+  const mineN=all.filter(a=>a.testedBy===ME.id).length;
+  const st=projectStats(p);
+  return `<tr><td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
+   <td>${esc(clientName(p.clientId))}<div class="muted" style="font-size:11px">${esc(p.site)}</div></td>
+   <td>${esc(p.start)} → ${esc(p.due)}</td><td>${badge(p.status)}</td><td>${mineN}</td>
+   <td style="min-width:130px"><div class="progressbar"><div style="width:${st.pct}%"></div></div><span class="muted" style="font-size:11px">${st.tested}/${st.expected} tested</span></td>
+   <td>${['Active','Planned'].includes(p.status)?`<button class="btn btn-sm btn-p" onclick="ACTIVE_PROJECT='${p.id}';show('testing')">Open</button>`:''}</td></tr>`;
+ }).join('')}</tbody></table></div></div>`;
+}};
+
+/* ============================================================
+   PROJECT MASTER (Super Admin)
+   ============================================================ */
+function projectStats(p){
+ const all=DB.assets.filter(a=>a.projectId===p.id);
+ const expected=p.scope.reduce((s,x)=>s+(+x.expected||0),0);
+ const tested=all.filter(a=>['Tested','Verified'].includes(a.status)).length;
+ const verified=all.filter(a=>a.status==='Verified').length;
+ const pending=all.filter(a=>['Registered','In Testing'].includes(a.status)).length;
+ const rejected=all.filter(a=>a.status==='Rejected').length;
+ return {all:all.length,expected:expected,tested:tested,verified:verified,pending:pending,rejected:rejected,
+  pct:expected?Math.min(100,Math.round(tested/expected*100)):(all.length?Math.round(tested/all.length*100):0),
+  vpct:all.length?Math.round(verified/all.length*100):0,
+  canClose:all.length>0&&verified===all.length&&all.length>=expected};
+}
+let PROJ_OPEN=null;
+VIEWS.projects={title:'Projects',crumb:'Create projects, assign teams, define asset scope',
+render(){
+ const rows=DB.projects.slice().reverse().map(p=>{
+  const st=projectStats(p);
+  return `<tr>
+   <td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
+   <td>${esc(clientName(p.clientId))}<div class="muted" style="font-size:11px">${esc(p.site)}</div></td>
+   <td>${esc(p.mode)}</td>
+   <td>${esc(p.start)}<div class="muted" style="font-size:11px">due ${esc(p.due)}</div></td>
+   <td>${badge(p.status)}</td>
+   <td>${p.team.map(t=>'<span class="tag">'+esc(userName(t))+'</span>').join('')||'<span class="muted">unassigned</span>'}</td>
+   <td style="min-width:140px"><div class="progressbar"><div style="width:${st.pct}%"></div></div>
+     <span class="muted" style="font-size:11px">${st.tested}/${st.expected||st.all} tested · ${st.verified} verified</span></td>
+   <td class="flex">
+     <button class="btn btn-sm ${PROJ_OPEN===p.id?'btn-p':''}" onclick="PROJ_OPEN='${p.id}';rerender()">Open</button>
+     <button class="btn btn-sm" onclick="editProject('${p.id}')">Edit</button>
+   </td></tr>`;
+ }).join('');
+ return `
+ <div class="kpis">
+  <div class="kpi teal"><div class="lbl">Active projects</div><div class="val">${DB.projects.filter(p=>p.status==='Active').length}</div></div>
+  <div class="kpi blue"><div class="lbl">Planned</div><div class="val">${DB.projects.filter(p=>p.status==='Planned').length}</div></div>
+  <div class="kpi green"><div class="lbl">Completed</div><div class="val">${DB.projects.filter(p=>p.status==='Completed').length}</div></div>
+  <div class="kpi purple"><div class="lbl">Engineers deployed</div><div class="val">${new Set(DB.projects.filter(p=>p.status==='Active').flatMap(p=>p.team)).size}</div></div>
+ </div>
+ <div class="card"><div class="card-h"><h3>All projects</h3>
+  <button class="btn btn-p btn-sm" onclick="editProject()">+ New project</button></div>
+  <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client / Site</th><th>Mode</th><th>Dates</th><th>Status</th><th>Team</th><th>Progress</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
+ ${projectDetail()}`;
+}};
+function projectDetail(){
+ const p=PROJ_OPEN?projectById(PROJ_OPEN):null;
+ if(!p)return '<div class="info">Select <b>Open</b> on a project to see its scope, team and live testing status.</div>';
+ const st=projectStats(p);
+ const all=DB.assets.filter(a=>a.projectId===p.id);
+ const scopeRows=p.scope.map(s=>{
+  const got=all.filter(a=>a.category===s.category);
+  const tested=got.filter(a=>['Tested','Verified'].includes(a.status)).length;
+  const pct=s.expected?Math.min(100,Math.round(got.length/s.expected*100)):0;
+  return `<tr><td><b>${esc(s.category)}</b></td><td>${s.expected}</td><td>${got.length}</td><td>${tested}</td>
+   <td>${got.filter(a=>a.status==='Verified').length}</td>
+   <td style="min-width:120px"><div class="progressbar"><div style="width:${pct}%"></div></div></td>
+   <td>${got.length<s.expected?'<span class="muted" style="font-size:11px">'+(s.expected-got.length)+' outstanding</span>':badge('Matched')}</td></tr>`;
+ }).join('');
+ const engRows=p.team.map(t=>{
+  const done=all.filter(a=>a.testedBy===t&&['Tested','Verified'].includes(a.status)).length;
+  return `<tr><td>${esc(userName(t))}</td><td>${all.filter(a=>a.testedBy===t).length}</td><td>${done}</td></tr>`;
+ }).join('');
+ return `<div class="card"><div class="card-h">
+  <h3>◈ ${esc(p.id)} — ${esc(p.name)} ${badge(p.status)}</h3>
+  <div class="flex">
+   <button class="btn btn-sm" onclick="projectLabels('${p.id}')">🏷 All labels</button>
+   <button class="btn btn-sm" onclick="exportProjectCSV('${p.id}')">⬇ Asset CSV</button>
+   ${p.status!=='Completed'?`<button class="btn btn-sm btn-p" onclick="completeProject('${p.id}')">✓ Mark completed</button>`:''}
+  </div></div>
+  <div class="card-b">
+   <div class="statgrid" style="margin-bottom:14px">
+    <div class="stat"><div class="v">${st.expected}</div><div class="l">In scope</div></div>
+    <div class="stat"><div class="v">${st.all}</div><div class="l">Captured</div></div>
+    <div class="stat"><div class="v" style="color:var(--amber)">${st.pending}</div><div class="l">Pending test</div></div>
+    <div class="stat"><div class="v" style="color:var(--purple)">${st.tested-st.verified}</div><div class="l">Awaiting verify</div></div>
+    <div class="stat"><div class="v" style="color:var(--green)">${st.verified}</div><div class="l">Verified</div></div>
+    <div class="stat"><div class="v" style="color:var(--red)">${st.rejected}</div><div class="l">Rejected</div></div>
+   </div>
+   <div class="frow" style="font-size:13px">
+    <div><label class="f">Client / site</label>${esc(clientName(p.clientId))} · ${esc(p.site)}</div>
+    <div><label class="f">Mode / manager</label>${esc(p.mode)} · ${esc(userName(p.managerId))}</div>
+   </div>
+   <label class="f">Notes</label><div style="font-size:13px">${esc(p.notes||'—')}</div>
+   ${st.canClose?'<div class="okbox" style="margin-top:12px">✓ Every captured asset is verified and the scope quantity is met — this project can be marked completed.</div>':(p.status!=='Completed'?'<div class="warn" style="margin-top:12px">Project stays open: '+(st.all-st.verified)+' asset(s) not yet verified'+(st.all<st.expected?', '+(st.expected-st.all)+' still to be captured':'')+'.</div>':'')}
+  </div>
+  <div class="grid2" style="padding:0 16px 16px">
+   <div><label class="f">Asset scope</label>
+    <div class="tblwrap" style="border:1px solid var(--line);border-radius:9px"><table><thead><tr><th>Category</th><th>Planned</th><th>Captured</th><th>Tested</th><th>Verified</th><th>Progress</th><th></th></tr></thead><tbody>${scopeRows}</tbody></table></div></div>
+   <div><label class="f">Team output</label>
+    <div class="tblwrap" style="border:1px solid var(--line);border-radius:9px"><table><thead><tr><th>Engineer</th><th>Captured</th><th>Tested</th></tr></thead><tbody>${engRows||'<tr><td colspan=3 class=muted>No engineers assigned</td></tr>'}</tbody></table></div></div>
+  </div></div>`;
+}
+function editProject(id){
+ const p=id?projectById(id):null;
+ const engs=DB.users.filter(u=>u.active);
+ openModal(`
+ <div class="modal-h"><h3>${p?'Edit':'New'} project</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <label class="f">Project name</label><input id="pj_name" value="${p?esc(p.name):''}" placeholder="Client HQ decommission — Phase 1">
+  <div class="frow">
+   <div><label class="f">Client</label><select id="pj_client">${DB.clients.map(c=>`<option value="${c.id}" ${p&&p.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
+   <div><label class="f">Mode</label><select id="pj_mode">${['Onsite (Client Premises)','Urbeno Facility','Hybrid'].map(m=>`<option ${p&&p.mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+  </div>
+  <label class="f">Site address</label><input id="pj_site" value="${p?esc(p.site):''}" placeholder="Building, area, city">
+  <div class="frow3">
+   <div><label class="f">Start date</label><input id="pj_start" type="date" value="${p?p.start:today()}"></div>
+   <div><label class="f">Due date</label><input id="pj_due" type="date" value="${p?p.due:today()}"></div>
+   <div><label class="f">Status</label><select id="pj_status">${['Planned','Active','On Hold','Completed','Cancelled'].map(s=>`<option ${p&&p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+  </div>
+  <label class="f">Project manager</label><select id="pj_mgr">${DB.users.filter(u=>u.role==='Super Admin').map(u=>`<option value="${u.id}" ${p&&p.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
+  <label class="f">Assign team (field engineers)</label>
+  <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;max-height:140px;overflow:auto">
+   ${engs.filter(u=>u.role==='Field Engineer').map(u=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0">
+     <input type="checkbox" class="pj_team" value="${u.id}" ${p&&p.team.includes(u.id)?'checked':''}> ${esc(u.name)} <span class="muted">${esc(u.email)}</span></label>`).join('')}
+  </div>
+  <label class="f">Asset scope — categories and planned quantities</label>
+  <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;max-height:220px;overflow:auto">
+   ${DB.categories.map(c=>{
+     const sc=p?p.scope.find(s=>s.category===c):null;
+     return `<div style="display:flex;gap:10px;align-items:center;padding:3px 0">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;flex:1">
+        <input type="checkbox" class="pj_cat" value="${esc(c)}" ${sc?'checked':''}> ${esc(c)}</label>
+      <input type="number" class="pj_qty" data-cat="${esc(c)}" value="${sc?sc.expected:''}" placeholder="qty" style="max-width:90px;padding:4px 8px;font-size:12px"></div>`;
+   }).join('')}
+  </div>
+  <label class="f">Notes / special instructions</label><textarea id="pj_notes" rows="2">${p?esc(p.notes||''):''}</textarea>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-p" onclick="saveProject(${p?"'"+p.id+"'":'null'})">${p?'Save changes':'Create project'}</button></div>`,true);
+}
+function saveProject(id){
+ const name=$('#pj_name').value.trim();
+ if(!name){toast('Project name is required');return;}
+ const team=$$('.pj_team:checked').map(el=>el.value);
+ const scope=$$('.pj_cat:checked').map(el=>{
+  const q=$$('.pj_qty').find(x=>x.dataset.cat===el.value);
+  return {category:el.value,expected:+(q&&q.value||0)};
+ });
+ if(!scope.length){toast('Select at least one asset category for the project scope');return;}
+ const data={name:name,clientId:$('#pj_client').value,site:$('#pj_site').value||'—',mode:$('#pj_mode').value,
+  start:$('#pj_start').value,due:$('#pj_due').value,status:$('#pj_status').value,
+  managerId:$('#pj_mgr').value,team:team,scope:scope,notes:$('#pj_notes').value||''};
+ if(id){Object.assign(projectById(id),data);toast('Project '+id+' updated');}
+ else{
+  const nid='PRJ-'+(DB.seq.project++);
+  DB.projects.push(Object.assign({id:nid},data));
+  PROJ_OPEN=nid;
+  toast('Project '+nid+' created — '+scope.length+' categor'+(scope.length>1?'ies':'y')+', '+team.length+' engineer(s) assigned');
+ }
+ closeModal();rerender();
+}
+function completeProject(id){
+ const p=projectById(id);const st=projectStats(p);
+ if(!st.canClose){
+  openModal(`<div class="modal-h"><h3>Close project ${esc(id)}?</h3><button class="x" onclick="closeModal()">×</button></div>
+  <div class="modal-b"><div class="warn">This project is not fully verified yet:</div>
+   <ul style="font-size:13px;margin-left:18px">
+     ${st.all<st.expected?'<li>'+(st.expected-st.all)+' asset(s) in scope have not been captured</li>':''}
+     ${st.pending?'<li>'+st.pending+' asset(s) still pending test</li>':''}
+     ${st.tested-st.verified?'<li>'+(st.tested-st.verified)+' asset(s) awaiting verification</li>':''}
+     ${st.rejected?'<li>'+st.rejected+' asset(s) rejected and not retested</li>':''}
+   </ul>
+   <div class="muted" style="font-size:12px;margin-top:10px">Closing now records the project as completed with these exceptions.</div></div>
+  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+   <button class="btn btn-danger" onclick="forceComplete('${id}')">Close anyway</button></div>`);
+  return;
+ }
+ p.status='Completed';rerender();toast(id+' marked completed — '+st.verified+' assets verified');
+}
+function forceComplete(id){
+ const p=projectById(id);p.status='Completed';closeModal();rerender();
+ toast(id+' closed with open exceptions — see the project report');
+}
+function projectLabels(id){
+ const list=DB.assets.filter(a=>a.projectId===id);
+ if(!list.length){toast('No assets captured for '+id+' yet');return;}
+ showLabels(list,id+' — '+list.length+' label(s)');
+}
+
+/* ============================================================
+   ASSET REGISTER (Super Admin)
+   ============================================================ */
+let REG={project:'all',category:'all',status:'all',q:''};
+VIEWS.register={title:'Asset Register',crumb:'Every asset captured, tested and verified',
+render(){
+ let list=DB.assets.slice();
+ if(REG.project!=='all')list=list.filter(a=>a.projectId===REG.project);
+ if(REG.category!=='all')list=list.filter(a=>a.category===REG.category);
+ if(REG.status!=='all')list=list.filter(a=>a.status===REG.status);
+ if(REG.q){const q=REG.q.toLowerCase();list=list.filter(a=>(a.serial+' '+a.usn+' '+a.brand+' '+a.model+' '+a.assetTag).toLowerCase().includes(q));}
+ const rows=list.slice().reverse().map(a=>`<tr>
+   <td><span class="linklike" onclick="assetDetail('${a.id}')"><b>${esc(a.serial)}</b></span>
+     <div class="muted" style="font-size:11px">${esc(a.usn)}${a.assetTag?' · '+esc(a.assetTag):''}</div></td>
+   <td>${esc(a.category)}<div class="muted" style="font-size:11px">${esc(a.brand)} ${esc(a.model)}</div></td>
+   <td>${esc(a.projectId)}</td>
+   <td>${badge(a.status)}</td>
+   <td>${a.grade?badge(a.grade):'—'}</td>
+   <td>${esc(a.testedBy?userName(a.testedBy):'—')}<div class="muted" style="font-size:11px">${esc(a.testedAt||'')}</div></td>
+   <td>${isBlanccoCat(a.category)?(a.blancco?'<span class="linklike" onclick="viewBlancco(\''+a.id+'\')">'+esc(a.blancco.reportId)+'</span>':'<span class="muted" style="font-size:11px">none</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
+   <td class="flex">
+     <button class="btn btn-sm" onclick="assetDetail('${a.id}')">View</button>
+     ${a.status==='Tested'?`<button class="btn btn-sm btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>
+       <button class="btn btn-sm btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>`:''}
+   </td></tr>`).join('');
+ const pend=DB.assets.filter(a=>a.status==='Tested');
+ return `
+ <div class="kpis">
+  <div class="kpi teal"><div class="lbl">Total assets</div><div class="val">${DB.assets.length}</div></div>
+  <div class="kpi amber"><div class="lbl">Pending test</div><div class="val">${DB.assets.filter(a=>['Registered','In Testing'].includes(a.status)).length}</div></div>
+  <div class="kpi purple"><div class="lbl">Awaiting verification</div><div class="val">${pend.length}</div></div>
+  <div class="kpi green"><div class="lbl">Verified</div><div class="val">${DB.assets.filter(a=>a.status==='Verified').length}</div></div>
+  <div class="kpi red"><div class="lbl">Rejected</div><div class="val">${DB.assets.filter(a=>a.status==='Rejected').length}</div></div>
+ </div>
+ ${pend.length?`<div class="warn">${pend.length} asset(s) submitted by engineers are waiting for your verification. Verify or reject them below — rejected assets go back to the engineer's open queue with your note.</div>`:''}
+ <div class="card"><div class="card-h"><h3>Register</h3>
+  <div class="flex">
+   <input placeholder="Search serial / USN / model" value="${esc(REG.q)}" oninput="REG.q=this.value;rerenderRegister()" style="max-width:230px">
+   <select onchange="REG.project=this.value;rerender()" style="max-width:180px"><option value="all">All projects</option>${DB.projects.map(p=>`<option value="${p.id}" ${REG.project===p.id?'selected':''}>${esc(p.id)}</option>`).join('')}</select>
+   <select onchange="REG.category=this.value;rerender()" style="max-width:150px"><option value="all">All categories</option>${DB.categories.map(c=>`<option ${REG.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+   <select onchange="REG.status=this.value;rerender()" style="max-width:160px"><option value="all">All statuses</option>${['Registered','In Testing','Tested','Verified','Rejected'].map(s=>`<option ${REG.status===s?'selected':''}>${s}</option>`).join('')}</select>
+   <button class="btn btn-sm" onclick="exportRegisterCSV()">⬇ CSV</button>
+   <button class="btn btn-sm" onclick="bulkVerify()">✓ Verify all shown</button>
+  </div></div>
+  <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Asset</th><th>Project</th><th>Status</th><th>Grade</th><th>Tested by</th><th>Blancco</th><th></th></tr></thead>
+  <tbody id="regbody">${rows||'<tr><td colspan=8 class=muted>No assets match these filters.</td></tr>'}</tbody></table></div>
+  <div class="card-b muted" style="font-size:12px">Showing ${list.length} of ${DB.assets.length} assets.</div></div>`;
+}};
+function rerenderRegister(){
+ const q=REG.q.toLowerCase();
+ $$('#regbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';});
+}
+function assetDetail(id){
+ const a=DB.assets.find(x=>x.id===id);
+ const params=paramsFor(a.category);
+ const g=gradeAsset(a);
+ const trows=params.map(p=>`<tr><td>${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</td>
+  <td>${a.tests[p.key]?badge(a.tests[p.key]):'<span class="muted">not recorded</span>'}</td>
+  <td>${esc((a.measures||{})[p.key]||'')}</td></tr>`).join('');
+ openModal(`
+ <div class="modal-h"><h3>${esc(a.serial)} — ${esc(a.category)} ${badge(a.status)} ${a.grade?badge(a.grade):''}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))} · ${esc(clientName((projectById(a.projectId)||{}).clientId))}</div>
+  ${a.status==='Rejected'?`<div class="errbox">Rejected: ${esc(a.rejectNote||'')}</div>`:''}
+  <div class="grid2">
+   <div>
+    <label class="f">Test results</label>
+    <div class="tblwrap" style="border:1px solid var(--line);border-radius:9px"><table><thead><tr><th>Parameter</th><th>Result</th><th>Measured</th></tr></thead><tbody>${trows}</tbody></table></div>
+    <label class="f">Grade rationale</label><div style="font-size:13px">${esc(g.reason)}</div>
+   </div>
+   <div>
+    <label class="f">Specifications</label>
+    <div style="font-size:12px">${Object.entries(a.specs||{}).map(([k,v])=>'<span class="tag">'+esc(k)+': '+esc(v)+'</span>').join('')||'<span class="muted">None captured</span>'}</div>
+    <label class="f">Cosmetic grade</label><div>${badge(a.cosmetic||'—')}</div>
+    <label class="f">Engineer remarks</label><div style="font-size:13px">${esc(a.remarks||'—')}</div>
+    ${isBlanccoCat(a.category)?`<label class="f">Blancco erasure</label>
+      ${a.blancco?`<div style="font-size:13px">${badge(a.blancco.status)} ${esc(a.blancco.reportId)} · ${esc(a.blancco.standard)}
+        <button class="btn btn-sm" onclick="viewBlancco('${a.id}')">Open report</button></div>`
+      :`<div class="warn" style="margin:4px 0 0">No report linked <button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Pull from API</button></div>`}`
+     :'<label class="f">Data sanitization</label><div class="muted" style="font-size:12px">Recorded manually — Blancco is laptop-only.</div>'}
+    <label class="f">Audit trail</label>
+    <div style="font-size:12px">${(a.history||[]).map(h=>`<div style="padding:3px 0;border-bottom:1px solid var(--line)"><span class="muted">${esc(h.ts)} · ${esc(h.by)}</span><br>${esc(h.ev)}</div>`).join('')}</div>
+   </div>
+  </div>
+ </div>
+ <div class="modal-f">
+  <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
+  ${a.status==='Tested'?`<button class="btn btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>
+    <button class="btn btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>`:''}
+  <button class="btn" onclick="closeModal()">Close</button></div>`,true);
+}
+function verifyAsset(id){
+ const a=DB.assets.find(x=>x.id===id);
+ if(blanccoRequired(a)&&!blanccoOK(a)){toast('Cannot verify '+a.serial+': laptops require a successful Blancco erasure report');return;}
+ if(!isTestComplete(a)){toast('Cannot verify '+a.serial+': test parameters incomplete');return;}
+ a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();a.rejectNote='';
+ a.history.push({ts:stamp(),by:ME.name,ev:'Verified by Super Admin — grade '+a.grade});
+ closeModal();rerender();toast(a.serial+' verified (grade '+a.grade+')');
+}
+function rejectAsset(id){
+ const a=DB.assets.find(x=>x.id===id);
+ openModal(`<div class="modal-h"><h3>✗ Reject ${esc(a.serial)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b"><div class="muted" style="margin-bottom:8px">${esc(a.brand)} ${esc(a.model)} · tested by ${esc(userName(a.testedBy))}</div>
+  <label class="f">Reason (returned to the engineer)</label>
+  <textarea id="rj_note" rows="3" maxlength="500" placeholder="e.g. battery health overstated, retest; port test not performed"></textarea></div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-danger" onclick="saveReject('${id}')">Reject &amp; return</button></div>`);
+}
+function saveReject(id){
+ const a=DB.assets.find(x=>x.id===id);
+ a.rejectNote=String($('#rj_note').value||'').trim()||'No reason given';
+ a.status='Rejected';
+ a.history.push({ts:stamp(),by:ME.name,ev:'Rejected at verification: '+a.rejectNote});
+ closeModal();rerender();toast(a.serial+' returned to '+userName(a.testedBy));
+}
+function bulkVerify(){
+ let n=0,skip=0;
+ DB.assets.filter(a=>a.status==='Tested').forEach(a=>{
+  if(REG.project!=='all'&&a.projectId!==REG.project)return;
+  if(REG.category!=='all'&&a.category!==REG.category)return;
+  if(blanccoRequired(a)&&!blanccoOK(a)){skip++;return;}
+  if(!isTestComplete(a)){skip++;return;}
+  a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();
+  a.history.push({ts:stamp(),by:ME.name,ev:'Verified (bulk) — grade '+a.grade});n++;
+ });
+ rerender();
+ toast(n?n+' asset(s) verified'+(skip?', '+skip+' skipped (incomplete tests or missing Blancco)':''):'Nothing eligible to verify'+(skip?' — '+skip+' blocked':''));
+}
+
+/* ============================================================
+   BLANCCO ERASURE (Super Admin)
+   ============================================================ */
+VIEWS.blancco={title:'Blancco Erasure Reports',crumb:'API-linked erasure evidence — laptops only',
+render(){
+ const laps=DB.assets.filter(a=>isBlanccoCat(a.category));
+ const linked=laps.filter(a=>a.blancco);
+ const erased=laps.filter(a=>a.blancco&&a.blancco.status==='Erased');
+ const failed=laps.filter(a=>a.blancco&&a.blancco.status==='Failed');
+ const missing=laps.filter(a=>!a.blancco);
+ const rows=laps.slice().reverse().map(a=>`<tr>
+   <td><b>${esc(a.serial)}</b><div class="muted" style="font-size:11px">${esc(a.usn)}</div></td>
+   <td>${esc(a.brand)} ${esc(a.model)}</td><td>${esc(a.projectId)}</td>
+   <td>${a.blancco?badge(a.blancco.status):badge('Pending')}</td>
+   <td>${a.blancco?esc(a.blancco.reportId):'—'}</td>
+   <td>${a.blancco?esc(a.blancco.standard):'—'}</td>
+   <td>${a.blancco?esc(a.blancco.date):'—'}</td>
+   <td class="flex">
+     ${a.blancco?`<button class="btn btn-sm" onclick="viewBlancco('${a.id}')">View</button>`:''}
+     <button class="btn btn-sm ${a.blancco?'':'btn-p'}" onclick="pullBlancco('${a.id}')">${a.blancco?'Re-pull':'Pull'}</button>
+   </td></tr>`).join('');
+ const cfg=DB.blanccoConfig;
+ return `
+ <div class="kpis">
+  <div class="kpi teal"><div class="lbl">Laptops in system</div><div class="val">${laps.length}</div></div>
+  <div class="kpi green"><div class="lbl">Erasure verified</div><div class="val">${erased.length}</div></div>
+  <div class="kpi red"><div class="lbl">Erasure failed</div><div class="val">${failed.length}</div></div>
+  <div class="kpi amber"><div class="lbl">No report yet</div><div class="val">${missing.length}</div></div>
+  <div class="kpi blue"><div class="lbl">Coverage</div><div class="val">${laps.length?Math.round(linked.length/laps.length*100):0}%</div></div>
+ </div>
+ <div class="info">🛡 <b>Scope:</b> Blancco covers the data-sanitization test parameter for <b>Laptops only</b>. Every other category records sanitization manually in its own checklist — the app blocks Blancco pulls for them. Laptops cannot be submitted or verified without a successful report.</div>
+ <div class="card"><div class="card-h"><h3>API configuration</h3>
+   <button class="btn btn-sm" onclick="saveBlanccoCfg()">Save</button></div>
+  <div class="card-b">
+   <div class="frow">
+    <div><label class="f">API endpoint</label><input id="bc_ep" value="${esc(cfg.endpoint)}"></div>
+    <div><label class="f">Mode</label><select id="bc_mode"><option ${cfg.mode.indexOf('Demo')===0?'selected':''}>Demo (simulated)</option><option ${cfg.mode==='Live'?'selected':''}>Live</option></select></div>
+   </div>
+   <div class="frow">
+    <div><label class="f">API key / token</label><input id="bc_key" type="password" value="${esc(cfg.apiKey)}" placeholder="Paste the Management Console API token"></div>
+    <div><label class="f">Auto-pull on registration</label><select id="bc_auto"><option value="1" ${cfg.autoFetch?'selected':''}>Yes — fetch as soon as a laptop is scanned</option><option value="0" ${cfg.autoFetch?'':'selected'}>No — pull manually</option></select></div>
+   </div>
+   <div class="muted" style="font-size:12px;margin-top:10px">Last sync ${esc(cfg.lastSync)} · reports are stored against each device and included in project reporting. In Demo mode the app synthesises a valid report so the flow can be exercised without credentials; append <span class="tag">FAILSEED</span> to a serial to simulate a failed erasure.</div>
+   <div class="flex" style="margin-top:12px">
+     <button class="btn btn-p" onclick="syncAllBlancco()">⟳ Pull reports for all laptops missing one</button>
+     <button class="btn" onclick="exportBlanccoCSV()">⬇ Erasure compliance CSV</button>
+   </div>
+  </div></div>
+ <div class="card"><div class="card-h"><h3>Laptop erasure register</h3></div>
+  <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Device</th><th>Project</th><th>Status</th><th>Report</th><th>Standard</th><th>Date</th><th></th></tr></thead>
+  <tbody>${rows||'<tr><td colspan=8 class=muted>No laptops captured yet.</td></tr>'}</tbody></table></div></div>`;
+}};
+function saveBlanccoCfg(){
+ const c=DB.blanccoConfig;
+ c.endpoint=$('#bc_ep').value;c.mode=$('#bc_mode').value;c.apiKey=$('#bc_key').value;
+ c.autoFetch=$('#bc_auto').value==='1';c.lastSync=stamp();
+ rerender();toast('Blancco configuration saved ('+c.mode+')');
+}
+async function syncAllBlancco(){
+ const targets=DB.assets.filter(a=>isBlanccoCat(a.category)&&!a.blancco);
+ if(!targets.length){toast('Every laptop already has a linked erasure report');return;}
+ toast('Pulling '+targets.length+' report(s) from Blancco…');
+ for(const a of targets){await pullBlancco(a.id,true);}
+ DB.blanccoConfig.lastSync=stamp();
+ rerender();toast('Sync complete — '+targets.length+' report(s) stored');
+}
+function exportBlanccoCSV(){
+ const laps=DB.assets.filter(a=>isBlanccoCat(a.category));
+ const rows=laps.map(a=>[a.usn,a.serial,a.brand+' '+a.model,a.projectId,clientName((projectById(a.projectId)||{}).clientId),
+  a.blancco?a.blancco.status:'No report',a.blancco?a.blancco.reportId:'',a.blancco?a.blancco.standard:'',
+  a.blancco?a.blancco.software:'',a.blancco?a.blancco.date:'',a.blancco?(a.blancco.verified?'Yes':'No'):'',
+  a.blancco?a.blancco.drives.map(d=>d.size+' '+d.model+' — '+d.result).join(' | '):'',a.blancco?a.blancco.operator:'']);
+ csvDownload('blancco_erasure_compliance_'+today()+'.csv',
+  toCSV(['Urbeno SN','Serial','Device','Project','Client','Erasure Status','Report ID','Standard','Software','Report Date','Verified','Drives','Operator'],rows));
+ toast('Erasure compliance CSV exported ('+laps.length+' laptops)');
+}
+
+/* ============================================================
+   RECONCILIATION — tested vs received
+   ============================================================ */
+let RECON_PROJECT='PRJ-1001';
+VIEWS.reconcile={title:'Reconciliation',crumb:'Upload the received manifest and match it against tested assets',
+render(){
+ const p=projectById(RECON_PROJECT)||DB.projects[0];
+ RECON_PROJECT=p.id;
+ const mf=DB.manifests.filter(m=>m.projectId===p.id).slice(-1)[0];
+ const assets=DB.assets.filter(a=>a.projectId===p.id);
+ let body='';
+ if(!mf){
+  body=`<div class="warn">No received manifest uploaded for ${esc(p.id)} yet. Upload the client's despatch/received list below to reconcile it against what your engineers actually tested.</div>`;
+ }else{
+  const bySerial={};assets.forEach(a=>bySerial[a.serial.toLowerCase()]=a);
+  const inMf={};mf.rows.forEach(r=>inMf[String(r.serial).toLowerCase()]=r);
+  const matched=[],missing=[],unexpected=[];
+  mf.rows.forEach(r=>{
+   const a=bySerial[String(r.serial).toLowerCase()];
+   if(a)matched.push({r:r,a:a});else missing.push(r);
+  });
+  assets.forEach(a=>{if(!inMf[a.serial.toLowerCase()])unexpected.push(a);});
+  const catMismatch=matched.filter(m=>m.r.category&&m.r.category.toLowerCase()!==m.a.category.toLowerCase());
+  const mrows=matched.map(m=>`<tr><td><b>${esc(m.r.serial)}</b></td><td>${esc(m.r.category||'—')}</td><td>${esc(m.a.category)}</td>
+    <td>${badge(m.a.status)}</td><td>${m.a.grade?badge(m.a.grade):'—'}</td>
+    <td>${m.r.category&&m.r.category.toLowerCase()!==m.a.category.toLowerCase()?badge('Unexpected')+' <span class="muted" style="font-size:11px">category differs</span>':badge('Matched')}</td></tr>`).join('');
+  const misrows=missing.map(r=>`<tr><td><b>${esc(r.serial)}</b></td><td>${esc(r.category||'—')}</td><td>${esc((r.brand||'')+' '+(r.model||''))}</td>
+    <td>${badge('Missing')}</td><td><button class="btn btn-sm" onclick="prefillScan('${esc(r.serial)}','${esc(p.id)}')">Capture now</button></td></tr>`).join('');
+  const unrows=unexpected.map(a=>`<tr><td><b>${esc(a.serial)}</b></td><td>${esc(a.category)}</td><td>${esc(a.brand)} ${esc(a.model)}</td>
+    <td>${badge(a.status)}</td><td>${badge('Unexpected')}</td></tr>`).join('');
+  body=`
+  <div class="kpis">
+   <div class="kpi blue"><div class="lbl">On manifest</div><div class="val">${mf.rows.length}</div><div class="sub">${esc(mf.file)}</div></div>
+   <div class="kpi green"><div class="lbl">Matched</div><div class="val">${matched.length}</div></div>
+   <div class="kpi red"><div class="lbl">Received not tested</div><div class="val">${missing.length}</div></div>
+   <div class="kpi amber"><div class="lbl">Tested not on manifest</div><div class="val">${unexpected.length}</div></div>
+   <div class="kpi purple"><div class="lbl">Category mismatch</div><div class="val">${catMismatch.length}</div></div>
+  </div>
+  ${missing.length||unexpected.length?`<div class="warn">⚠ Reconciliation gap: ${missing.length} device(s) on the client manifest have not been captured, and ${unexpected.length} tested device(s) do not appear on the manifest. Resolve before closing ${esc(p.id)}.</div>`:'<div class="okbox">✓ Manifest and tested assets reconcile fully.</div>'}
+  <div class="card"><div class="card-h"><h3>Matched (${matched.length})</h3>
+    <button class="btn btn-sm" onclick="exportReconCSV()">⬇ Reconciliation CSV</button></div>
+   <div class="tblwrap"><table><thead><tr><th>Serial</th><th>Manifest category</th><th>Tested as</th><th>Status</th><th>Grade</th><th>Result</th></tr></thead><tbody>${mrows||'<tr><td colspan=6 class=muted>None</td></tr>'}</tbody></table></div></div>
+  <div class="grid2">
+   <div class="card"><div class="card-h"><h3>Received but not tested (${missing.length})</h3></div>
+    <div class="tblwrap"><table><thead><tr><th>Serial</th><th>Category</th><th>Device</th><th>Result</th><th></th></tr></thead><tbody>${misrows||'<tr><td colspan=5 class=muted>None — everything received has been tested.</td></tr>'}</tbody></table></div></div>
+   <div class="card"><div class="card-h"><h3>Tested but not on manifest (${unexpected.length})</h3></div>
+    <div class="tblwrap"><table><thead><tr><th>Serial</th><th>Category</th><th>Device</th><th>Status</th><th>Result</th></tr></thead><tbody>${unrows||'<tr><td colspan=5 class=muted>None</td></tr>'}</tbody></table></div></div>
+  </div>`;
+ }
+ return `
+ <div class="card"><div class="card-h"><h3>Received manifest upload</h3>
+   <select onchange="RECON_PROJECT=this.value;rerender()" style="max-width:300px">
+     ${DB.projects.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.id)} — ${esc(x.name)}</option>`).join('')}</select></div>
+  <div class="card-b">
+   <div class="muted" style="font-size:12px;margin-bottom:8px">Upload the client's despatch note / goods-received list. Required column: <span class="tag">serial</span>. Optional: <span class="tag">category</span> <span class="tag">brand</span> <span class="tag">model</span>.</div>
+   <div class="frow">
+     <div><label class="f">CSV file</label><input type="file" accept=".csv,text/csv" onchange="reconFile(event)"></div>
+     <div><label class="f">…or paste CSV</label><textarea id="mf_txt" rows="3" style="font-family:monospace;font-size:12px" placeholder="serial,category,brand,model"></textarea></div>
+   </div>
+   <div class="flex" style="margin-top:10px">
+     <button class="btn btn-p" onclick="uploadManifest()">Upload &amp; reconcile</button>
+     <button class="btn" onclick="manifestTemplate()">⬇ Template</button>
+     ${DB.manifests.filter(m=>m.projectId===p.id).length?`<span class="muted" style="font-size:12px">Last upload: ${esc((DB.manifests.filter(m=>m.projectId===p.id).slice(-1)[0]||{}).uploaded)}</span>`:''}
+   </div>
+  </div></div>
+ ${body}`;
+}};
+function reconFile(e){
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{$('#mf_txt').value=r.result;$('#mf_txt').dataset.name=f.name;toast('Loaded '+f.name);};
+ r.readAsText(f);
+}
+function manifestTemplate(){
+ csvDownload('received_manifest_template.csv',
+  toCSV(['serial','category','brand','model'],[['DL5540-88213','Laptop','Dell','Latitude 5540'],['MON-55910','Monitor','Dell','P2422H']]));
+ toast('Template downloaded');
+}
+function uploadManifest(){
+ const rows=parseCSV($('#mf_txt').value);
+ if(!rows.length){toast('No rows found — include a header row with a "serial" column');return;}
+ const clean=rows.filter(r=>r.serial).map(r=>({serial:r.serial,category:r.category||'',brand:r.brand||'',model:r.model||''}));
+ if(!clean.length){toast('No "serial" column found in the uploaded file');return;}
+ DB.manifests.push({id:'MF-'+(DB.manifests.length+1),projectId:RECON_PROJECT,uploaded:today(),by:ME.id,
+  file:$('#mf_txt').dataset.name||'pasted.csv',rows:clean});
+ rerender();
+ toast('Manifest uploaded: '+clean.length+' device(s) reconciled against '+RECON_PROJECT);
+}
+function prefillScan(serial,pid){
+ ACTIVE_PROJECT=pid;show('testing');
+ setTimeout(()=>{const el=$('#scanin');if(el){el.value=serial;el.focus();}},60);
+ toast('Ready to capture '+serial+' — press Enter to register');
+}
+function exportReconCSV(){
+ const p=projectById(RECON_PROJECT);
+ const mf=DB.manifests.filter(m=>m.projectId===p.id).slice(-1)[0];
+ if(!mf){toast('No manifest to export');return;}
+ const assets=DB.assets.filter(a=>a.projectId===p.id);
+ const bySerial={};assets.forEach(a=>bySerial[a.serial.toLowerCase()]=a);
+ const inMf={};mf.rows.forEach(r=>inMf[String(r.serial).toLowerCase()]=r);
+ const out=[];
+ mf.rows.forEach(r=>{
+  const a=bySerial[String(r.serial).toLowerCase()];
+  out.push([r.serial,r.category||'',a?a.category:'',a?a.usn:'',a?a.status:'Not captured',a?a.grade:'',a?userName(a.testedBy):'',a?'Matched':'Missing — received not tested']);
+ });
+ assets.forEach(a=>{if(!inMf[a.serial.toLowerCase()])out.push([a.serial,'',a.category,a.usn,a.status,a.grade,userName(a.testedBy),'Unexpected — tested not on manifest']);});
+ csvDownload('reconciliation_'+p.id+'_'+today()+'.csv',
+  toCSV(['Serial','Manifest Category','Tested Category','Urbeno SN','Status','Grade','Tested By','Reconciliation Result'],out));
+ toast('Reconciliation CSV exported');
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+VIEWS.dashboard={title:'Dashboard',crumb:'Testing status by project until completion',
+render(){
+ const admin=ME.role==='Super Admin';
+ const ps=myProjects();
+ const open=ps.filter(p=>p.status!=='Completed'&&p.status!=='Cancelled');
+ const assets=visibleAssets();
+ const prows=open.map(p=>{
+  const st=projectStats(p);
+  const late=p.due<today()&&p.status!=='Completed';
+  return `<tr>
+   <td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
+   <td>${esc(clientName(p.clientId))}</td>
+   <td>${esc(p.due)}${late?' <span class="badge b-red">overdue</span>':''}</td>
+   <td>${st.all}/${st.expected}</td>
+   <td style="min-width:150px"><div class="progressbar"><div style="width:${st.pct}%;background:${st.pct>=100?'var(--green)':'var(--accent)'}"></div></div>
+     <span class="muted" style="font-size:11px">${st.tested} tested · ${st.verified} verified · ${st.pending} pending</span></td>
+   <td>${st.rejected?'<span class="badge b-red">'+st.rejected+'</span>':'—'}</td>
+   <td>${st.canClose?badge('Completed').replace('Completed','ready to close'):badge(p.status)}</td>
+  </tr>`;
+ }).join('');
+ const laps=assets.filter(a=>isBlanccoCat(a.category));
+ const lapsMissing=laps.filter(a=>!a.blancco).length;
+ const pendVerify=assets.filter(a=>a.status==='Tested').length;
+ return `
+ <div class="kpis">
+  <div class="kpi teal"><div class="lbl">${admin?'Open projects':'My open projects'}</div><div class="val">${open.length}</div><div class="sub">${ps.filter(p=>p.status==='Completed').length} completed</div></div>
+  <div class="kpi blue"><div class="lbl">Assets captured</div><div class="val">${assets.length}</div></div>
+  <div class="kpi amber"><div class="lbl">Pending test</div><div class="val">${assets.filter(a=>['Registered','In Testing'].includes(a.status)).length}</div></div>
+  <div class="kpi purple"><div class="lbl">Awaiting verification</div><div class="val">${pendVerify}</div></div>
+  <div class="kpi green"><div class="lbl">Verified</div><div class="val">${assets.filter(a=>a.status==='Verified').length}</div></div>
+  <div class="kpi red"><div class="lbl">Rejected / rework</div><div class="val">${assets.filter(a=>a.status==='Rejected').length}</div></div>
+ </div>
+ <div class="card"><div class="card-h"><h3>Project testing status</h3>
+   <span class="muted" style="font-size:12px">Projects remain here until every asset is verified and the project is marked completed</span></div>
+  <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client</th><th>Due</th><th>Captured</th><th>Testing progress</th><th>Rejected</th><th>Status</th></tr></thead>
+  <tbody>${prows||'<tr><td colspan=7 class=muted>No open projects.</td></tr>'}</tbody></table></div></div>
+ <div class="grid2">
+  <div class="card"><div class="card-h"><h3>Status mix</h3></div><div class="card-b"><div class="chartbox"><canvas id="chStatus"></canvas></div></div></div>
+  <div class="card"><div class="card-h"><h3>Grade distribution</h3></div><div class="card-b"><div class="chartbox"><canvas id="chGrade"></canvas></div></div></div>
+ </div>
+ <div class="grid2">
+  <div class="card"><div class="card-h"><h3>Assets by category</h3></div><div class="card-b"><div class="chartbox"><canvas id="chCat"></canvas></div></div></div>
+  <div class="card"><div class="card-h"><h3>Attention needed</h3></div><div class="card-b" style="font-size:13px">
+   ${pendVerify?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🟣 <b>${pendVerify}</b> asset(s) awaiting verification ${admin?'— <span class="linklike" onclick="show(\'register\')">open register</span>':'(with the Super Admin)'}</div>`:''}
+   ${assets.filter(a=>a.status==='Rejected').length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🔴 <b>${assets.filter(a=>a.status==='Rejected').length}</b> rejected asset(s) need rework — <span class="linklike" onclick="show('testing')">open testing queue</span></div>`:''}
+   ${lapsMissing?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🛡 <b>${lapsMissing}</b> laptop(s) without a Blancco erasure report ${admin?'— <span class="linklike" onclick="show(\'blancco\')">pull now</span>':''}</div>`:''}
+   ${open.filter(p=>p.due<today()).length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">⏰ <b>${open.filter(p=>p.due<today()).length}</b> project(s) past due date</div>`:''}
+   ${open.filter(p=>projectStats(p).canClose).length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">✅ <b>${open.filter(p=>projectStats(p).canClose).length}</b> project(s) ready to be marked completed</div>`:''}
+   ${!pendVerify&&!lapsMissing&&!assets.filter(a=>a.status==='Rejected').length?'<div class="muted">Nothing outstanding. 🎉</div>':''}
+  </div></div>
+ </div>`;
+},
+after(){
+ if(typeof Chart==='undefined')return;
+ const assets=visibleAssets();
+ const stat={};['Registered','In Testing','Tested','Verified','Rejected'].forEach(s=>stat[s]=assets.filter(a=>a.status===s).length);
+ new Chart($('#chStatus'),{type:'doughnut',data:{labels:Object.keys(stat),datasets:[{data:Object.values(stat),
+  backgroundColor:['#94a3b8','#f59e0b','#8b5cf6','#22c55e','#ef4444']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
+ const gr={A:0,B:0,C:0,D:0};assets.forEach(a=>{if(a.grade&&['Tested','Verified','Rejected'].includes(a.status))gr[a.grade]=(gr[a.grade]||0)+1;});
+ new Chart($('#chGrade'),{type:'bar',data:{labels:['A','B','C','D'],datasets:[{label:'Assets',data:[gr.A,gr.B,gr.C,gr.D],
+  backgroundColor:['#22c55e','#3b82f6','#f59e0b','#ef4444'],borderRadius:6}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+ const cats={};assets.forEach(a=>cats[a.category]=(cats[a.category]||0)+1);
+ new Chart($('#chCat'),{type:'bar',data:{labels:Object.keys(cats),datasets:[{label:'Assets',data:Object.values(cats),
+  backgroundColor:'#0d9488',borderRadius:6}]},options:{maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
+}};
+
+/* ============================================================
+   REPORTS
+   ============================================================ */
+VIEWS.reports={title:'Reports',crumb:'Export registers, project summaries and compliance evidence',
+render(){
+ const rows=DB.projects.map(p=>{
+  const st=projectStats(p);
+  return `<tr><td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
+   <td>${esc(clientName(p.clientId))}</td><td>${badge(p.status)}</td>
+   <td>${st.all}/${st.expected}</td><td>${st.tested}</td><td>${st.verified}</td><td>${st.rejected}</td>
+   <td class="flex"><button class="btn btn-sm" onclick="exportProjectCSV('${p.id}')">⬇ Assets</button>
+    <button class="btn btn-sm" onclick="projectSummary('${p.id}')">📄 Summary</button></td></tr>`;
+ }).join('');
+ return `
+ <div class="card"><div class="card-h"><h3>Standard exports</h3></div><div class="card-b flex">
+   <button class="btn btn-p" onclick="exportRegisterCSV()">⬇ Full asset register (CSV)</button>
+   <button class="btn" onclick="exportTestDetailCSV()">⬇ Test results — parameter level (CSV)</button>
+   <button class="btn" onclick="exportBlanccoCSV()">⬇ Blancco erasure compliance (CSV)</button>
+   <button class="btn" onclick="exportGradeCSV()">⬇ Grade summary (CSV)</button>
+   <button class="btn" onclick="exportEngineerCSV()">⬇ Engineer productivity (CSV)</button>
+ </div></div>
+ <div class="card"><div class="card-h"><h3>Project reports</h3></div>
+  <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Captured</th><th>Tested</th><th>Verified</th><th>Rejected</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}};
+function assetRow(a){
+ const p=projectById(a.projectId)||{};
+ const pr=testProgress(a);
+ const failed=paramsFor(a.category).filter(x=>a.tests[x.key]==='Fail').map(x=>x.label.replace(/&amp;/g,'&')).join('; ');
+ return [a.usn,a.serial,a.assetTag,a.category,a.brand,a.model,a.projectId,p.name,clientName(p.clientId),
+  a.status,a.grade,a.cosmetic,a.gradeReason,pr.done+'/'+pr.total,failed,
+  userName(a.testedBy),a.testedAt,a.verifiedBy?userName(a.verifiedBy):'',a.verifiedAt,
+  isBlanccoCat(a.category)?(a.blancco?a.blancco.status:'No report'):'N/A (non-laptop)',
+  a.blancco?a.blancco.reportId:'',a.blancco?a.blancco.standard:'',
+  Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; '),a.remarks,a.rejectNote||''];
+}
+const ASSET_COLS=['Urbeno SN','Serial','Client Asset Tag','Category','Brand','Model','Project ID','Project','Client',
+ 'Status','Grade','Cosmetic','Grade Rationale','Tests Recorded','Failed Parameters',
+ 'Tested By','Tested On','Verified By','Verified On','Blancco Status','Blancco Report','Erasure Standard',
+ 'Specifications','Remarks','Rejection Note'];
+function exportRegisterCSV(){
+ csvDownload('asset_register_'+today()+'.csv',toCSV(ASSET_COLS,DB.assets.map(assetRow)));
+ toast('Asset register exported — '+DB.assets.length+' assets');
+}
+function exportProjectCSV(pid){
+ const list=DB.assets.filter(a=>a.projectId===pid);
+ csvDownload('assets_'+pid+'_'+today()+'.csv',toCSV(ASSET_COLS,list.map(assetRow)));
+ toast(pid+' asset export — '+list.length+' assets');
+}
+function exportTestDetailCSV(){
+ const out=[];
+ DB.assets.forEach(a=>{
+  paramsFor(a.category).forEach(p=>{
+   out.push([a.usn,a.serial,a.category,a.projectId,p.label.replace(/&amp;/g,'&'),p.critical?'Yes':'No',
+    a.tests[p.key]||'Not recorded',(a.measures||{})[p.key]||'',p.blancco?'Blancco API':'Manual',
+    userName(a.testedBy),a.testedAt||'']);
+  });
+ });
+ csvDownload('test_results_detail_'+today()+'.csv',
+  toCSV(['Urbeno SN','Serial','Category','Project','Test Parameter','Critical','Result','Measured Value','Source','Tested By','Tested On'],out));
+ toast('Parameter-level test results exported — '+out.length+' rows');
+}
+function exportGradeCSV(){
+ const map={};
+ DB.assets.forEach(a=>{
+  const k=a.projectId+'|'+a.category;
+  map[k]=map[k]||{A:0,B:0,C:0,D:0,total:0};
+  if(a.grade&&a.status!=='Registered')map[k][a.grade]++;
+  map[k].total++;
+ });
+ const rows=Object.entries(map).map(([k,v])=>{const [pid,cat]=k.split('|');return [pid,projectName(pid),cat,v.total,v.A,v.B,v.C,v.D];});
+ csvDownload('grade_summary_'+today()+'.csv',toCSV(['Project ID','Project','Category','Assets','Grade A','Grade B','Grade C','Grade D'],rows));
+ toast('Grade summary exported');
+}
+function exportEngineerCSV(){
+ const rows=DB.users.filter(u=>u.role==='Field Engineer').map(u=>{
+  const mine=DB.assets.filter(a=>a.testedBy===u.id);
+  const done=mine.filter(a=>['Tested','Verified'].includes(a.status));
+  const rej=mine.filter(a=>a.status==='Rejected');
+  return [u.name,u.email,mine.length,done.length,mine.filter(a=>a.status==='Verified').length,rej.length,
+   done.length?Math.round((done.length-rej.length)/done.length*100)+'%':'—',
+   DB.projects.filter(p=>p.team.includes(u.id)).map(p=>p.id).join('; ')];
+ });
+ csvDownload('engineer_productivity_'+today()+'.csv',
+  toCSV(['Engineer','Email','Assets Captured','Tests Submitted','Verified','Rejected','First-Pass Rate','Projects'],rows));
+ toast('Engineer productivity exported');
+}
+function projectSummary(pid){
+ const p=projectById(pid);const st=projectStats(p);
+ const all=DB.assets.filter(a=>a.projectId===pid);
+ const gr={A:0,B:0,C:0,D:0};all.forEach(a=>{if(a.grade&&a.status!=='Registered')gr[a.grade]++;});
+ const laps=all.filter(a=>isBlanccoCat(a.category));
+ const mf=DB.manifests.filter(m=>m.projectId===pid).slice(-1)[0];
+ openModal(`
+ <div class="modal-h"><h3>📄 Project summary — ${esc(pid)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div style="border:2px solid var(--accent2);border-radius:10px;padding:20px">
+   <h2 style="text-align:center;color:var(--accent2);font-size:17px;letter-spacing:.06em">PROJECT TESTING SUMMARY</h2>
+   <p style="text-align:center;font-size:12px;color:var(--mut);margin:6px 0 14px">${esc(DB.company.name)} · GSTIN ${esc(DB.company.gstin)}</p>
+   ${[['Project',p.id+' — '+p.name],['Client',clientName(p.clientId)],['Site / mode',p.site+' · '+p.mode],
+     ['Window',p.start+' → '+p.due],['Status',p.status],['Project manager',userName(p.managerId)],
+     ['Engineers',p.team.map(userName).join(', ')||'—'],
+     ['Assets in scope',String(st.expected)],['Assets captured',String(st.all)],
+     ['Tested',String(st.tested)],['Verified',String(st.verified)],['Rejected / rework',String(st.rejected)],
+     ['Grade mix','A: '+gr.A+' · B: '+gr.B+' · C: '+gr.C+' · D: '+gr.D],
+     ['Laptops with verified erasure',laps.filter(a=>a.blancco&&a.blancco.status==='Erased').length+' of '+laps.length],
+     ['Manifest reconciliation',mf?(mf.rows.length+' on manifest, '+mf.rows.filter(r=>all.some(a=>a.serial.toLowerCase()===String(r.serial).toLowerCase())).length+' matched'):'No manifest uploaded']
+   ].map(([k,v])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:7px 0;font-size:13px"><span>${esc(k)}</span><b style="text-align:right;max-width:60%">${esc(v)}</b></div>`).join('')}
+   <p style="font-size:11px;color:var(--mut);margin-top:12px">Serialized results, parameter-level evidence and Blancco erasure reports are retained against each device and exportable from the Reports module.</p>
+  </div>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Close</button>
+  <button class="btn" onclick="exportProjectCSV('${pid}')">⬇ Asset CSV</button>
+  <button class="btn btn-p" onclick="window.print()">🖨 Print</button></div>`);
+}
+
+/* ============================================================
+   MASTERS (Super Admin)
+   ============================================================ */
+let MD_TAB='categories';
+VIEWS.masters={title:'Masters',crumb:'Asset categories, test parameters, clients, company',
+render(){
+ const tabs=[['categories','Asset Categories'],['params','Test Parameters'],['specs','Spec Fields'],['clients','Clients'],['company','Company']];
+ return `<div class="subtabs">${tabs.map(([k,l])=>`<div class="subtab ${MD_TAB===k?'active':''}" onclick="MD_TAB='${k}';rerender()">${l}</div>`).join('')}</div>${mdBody()}`;
+}};
+function mdBody(){
+ if(MD_TAB==='categories'){
+  const rows=DB.categories.map(c=>`<tr><td><b>${esc(c)}</b></td>
+   <td>${(DB.testParams[c]||[]).length} parameter(s)</td>
+   <td>${DB.assets.filter(a=>a.category===c).length}</td>
+   <td>${isBlanccoCat(c)?badge('Erased').replace('Erased','Blancco enabled'):'<span class="muted" style="font-size:12px">manual sanitization</span>'}</td>
+   <td class="flex"><button class="btn btn-sm" onclick="MD_TAB='params';PARAM_CAT='${esc(c)}';rerender()">Parameters</button>
+    <button class="btn btn-sm btn-danger" onclick="delCategory('${esc(c)}')">Remove</button></td></tr>`).join('');
+  return `<div class="card"><div class="card-h"><h3>Asset categories</h3></div>
+   <div class="card-b"><div class="flex">
+     <input id="mc_name" placeholder="e.g. Docking Station" style="max-width:240px">
+     <button class="btn btn-p btn-sm" onclick="addCategory()">+ Add category</button>
+     <span class="muted" style="font-size:12px">New categories are immediately selectable in project scope and asset registration.</span>
+   </div></div>
+   <div class="tblwrap"><table><thead><tr><th>Category</th><th>Test parameters</th><th>Assets</th><th>Data sanitization</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+ }
+ if(MD_TAB==='params'){
+  const cat=window.PARAM_CAT||DB.categories[0];
+  const ps=paramsFor(cat);
+  const rows=ps.map((p,i)=>`<tr><td>${i+1}</td><td><b>${p.label}</b>${p.blancco?' <span class="tag">Blancco-linked</span>':''}</td>
+   <td>${p.critical?'<span class="badge b-red">Critical</span>':'<span class="badge b-gray">Standard</span>'}</td>
+   <td>${p.measure?esc(p.measure):'<span class="muted">—</span>'}</td>
+   <td class="flex"><button class="btn btn-sm" onclick="toggleCritical('${esc(cat)}',${i})">${p.critical?'Make standard':'Make critical'}</button>
+    <button class="btn btn-sm btn-danger" onclick="delParam('${esc(cat)}',${i})">Remove</button></td></tr>`).join('');
+  return `<div class="card"><div class="card-h"><h3>Test parameters</h3>
+    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${DB.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+   <div class="card-b">
+    <div class="muted" style="font-size:12px;margin-bottom:8px">A <b>critical</b> failure forces the asset to grade D regardless of cosmetics. Engineers must record every parameter before submitting.
+     ${isBlanccoCat(cat)?'This category is Blancco-linked: the sanitization parameter is filled automatically from the erasure report and cannot be set by hand.':''}</div>
+    <div class="frow3">
+     <div><label class="f">Parameter label</label><input id="mp_label" placeholder="e.g. Fingerprint reader"></div>
+     <div><label class="f">Measured value (optional)</label><input id="mp_measure" placeholder="e.g. Battery health %"></div>
+     <div><label class="f">Severity</label><select id="mp_crit"><option value="0">Standard</option><option value="1">Critical</option></select></div>
+    </div>
+    <button class="btn btn-p btn-sm" style="margin-top:10px" onclick="addParam('${esc(cat)}')">+ Add parameter</button></div>
+   <div class="tblwrap"><table><thead><tr><th>#</th><th>Parameter</th><th>Severity</th><th>Measured value</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+ }
+ if(MD_TAB==='specs'){
+  const cat=window.PARAM_CAT||DB.categories[0];
+  return `<div class="card"><div class="card-h"><h3>Specification fields</h3>
+    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${DB.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+   <div class="card-b">
+    <div class="muted" style="font-size:12px;margin-bottom:8px">These fields appear on the asset registration form and the test sheet for <b>${esc(cat)}</b>. Add whatever your clients ask for — they flow into the register and all CSV exports.</div>
+    <div class="flex"><input id="ms_name" placeholder="e.g. Battery Cycle Count" style="max-width:260px">
+     <button class="btn btn-p btn-sm" onclick="addSpecField('${esc(cat)}')">+ Add field</button></div>
+    <div style="margin-top:12px">${specsFor(cat).map((f,i)=>`<span class="tag" style="font-size:12px;padding:5px 9px">${esc(f)}
+      <span style="cursor:pointer;color:var(--red);font-weight:700;margin-left:6px" onclick="delSpecField('${esc(cat)}',${i})">×</span></span>`).join('')}</div>
+   </div></div>`;
+ }
+ if(MD_TAB==='clients'){
+  const rows=DB.clients.map(c=>`<tr><td><b>${esc(c.name)}</b><div class="muted" style="font-size:11px">${esc(c.address)}</div></td>
+   <td>${esc(c.gstin)}<div class="muted" style="font-size:11px">PAN ${esc(c.pan||'—')}</div></td>
+   <td>${esc(c.contact)}<div class="muted" style="font-size:11px">${esc(c.email)} · ${esc(c.phone)}</div></td>
+   <td>${DB.projects.filter(p=>p.clientId===c.id).length}</td>
+   <td><button class="btn btn-sm" onclick="editClient('${c.id}')">Edit</button></td></tr>`).join('');
+  return `<div class="card"><div class="card-h"><h3>Clients</h3><button class="btn btn-p btn-sm" onclick="editClient()">+ New client</button></div>
+   <div class="tblwrap"><table><thead><tr><th>Client</th><th>GSTIN / PAN</th><th>Contact</th><th>Projects</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+ }
+ if(MD_TAB==='company'){
+  const c=DB.company;
+  return `<div class="card"><div class="card-h"><h3>Company profile</h3></div><div class="card-b">
+   <div class="frow"><div><label class="f">Legal name</label><input id="co_name" value="${esc(c.name)}"></div>
+    <div><label class="f">Product brand</label><input id="co_brand" value="${esc(c.brand)}"></div></div>
+   <div class="frow"><div><label class="f">GSTIN</label><input id="co_gst" value="${esc(c.gstin)}"></div>
+    <div><label class="f">Reporting currency</label><input value="INR (₹)" disabled></div></div>
+   <button class="btn btn-p btn-sm" style="margin-top:12px" onclick="saveCompany()">Save</button>
+  </div></div>`;
+ }
+ return '';
+}
+function addCategory(){
+ const v=$('#mc_name').value.trim();
+ if(!v){toast('Enter a category name');return;}
+ if(DB.categories.some(c=>c.toLowerCase()===v.toLowerCase())){toast('That category already exists');return;}
+ DB.categories.push(v);
+ DB.testParams[v]=[{key:'poweron',label:'Powers on / functional check',critical:true},{key:'condition',label:'Physical condition acceptable',critical:false}];
+ DB.specFields[v]=['Make/Model detail','Year'];
+ rerender();toast('Category "'+v+'" added with a starter test checklist');
+}
+function delCategory(c){
+ if(DB.assets.some(a=>a.category===c)){toast('Cannot remove '+c+' — assets of this category exist');return;}
+ if(DB.projects.some(p=>p.scope.some(s=>s.category===c))){toast('Cannot remove '+c+' — it is in a project scope');return;}
+ DB.categories=DB.categories.filter(x=>x!==c);delete DB.testParams[c];delete DB.specFields[c];
+ rerender();toast(c+' removed');
+}
+function addParam(cat){
+ const label=$('#mp_label').value.trim();
+ if(!label){toast('Enter a parameter label');return;}
+ DB.testParams[cat]=DB.testParams[cat]||[];
+ DB.testParams[cat].push({key:'p'+Date.now().toString(36),label:label,critical:$('#mp_crit').value==='1',measure:$('#mp_measure').value||undefined});
+ rerender();toast('Parameter added to '+cat);
+}
+function delParam(cat,i){
+ const p=DB.testParams[cat][i];
+ if(p.blancco){toast('The Blancco-linked parameter cannot be removed while the category is Blancco-enabled');return;}
+ DB.testParams[cat].splice(i,1);rerender();toast('Parameter removed');
+}
+function toggleCritical(cat,i){
+ DB.testParams[cat][i].critical=!DB.testParams[cat][i].critical;
+ DB.assets.filter(a=>a.category===cat).forEach(recomputeGrade);
+ rerender();toast('Severity updated — grades recalculated for '+cat);
+}
+function addSpecField(cat){
+ const v=$('#ms_name').value.trim();if(!v){toast('Enter a field name');return;}
+ DB.specFields[cat]=DB.specFields[cat]||[];
+ if(DB.specFields[cat].includes(v)){toast('Field already exists');return;}
+ DB.specFields[cat].push(v);rerender();toast('"'+v+'" added to '+cat);
+}
+function delSpecField(cat,i){DB.specFields[cat].splice(i,1);rerender();toast('Field removed');}
+function editClient(id){
+ const c=id?DB.clients.find(x=>x.id===id):null;
+ openModal(`<div class="modal-h"><h3>${c?'Edit':'New'} client</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <label class="f">Client name</label><input id="cl_name" value="${c?esc(c.name):''}">
+  <div class="frow"><div><label class="f">GSTIN</label><input id="cl_gst" value="${c?esc(c.gstin):''}" placeholder="27AAACX0000X1Z5"></div>
+   <div><label class="f">PAN</label><input id="cl_pan" value="${c?esc(c.pan||''):''}"></div></div>
+  <div class="frow"><div><label class="f">Contact person</label><input id="cl_contact" value="${c?esc(c.contact):''}"></div>
+   <div><label class="f">Phone</label><input id="cl_phone" value="${c?esc(c.phone):''}"></div></div>
+  <label class="f">Email</label><input id="cl_email" value="${c?esc(c.email):''}">
+  <label class="f">Address</label><input id="cl_addr" value="${c?esc(c.address):''}">
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-p" onclick="saveClient(${c?"'"+c.id+"'":'null'})">Save</button></div>`);
+}
+function saveClient(id){
+ const name=$('#cl_name').value.trim();if(!name){toast('Client name is required');return;}
+ const data={name:name,gstin:$('#cl_gst').value||'—',pan:$('#cl_pan').value||'—',contact:$('#cl_contact').value||'—',
+  phone:$('#cl_phone').value||'—',email:$('#cl_email').value||'—',address:$('#cl_addr').value||'—'};
+ if(id)Object.assign(DB.clients.find(x=>x.id===id),data);
+ else DB.clients.push(Object.assign({id:'CL-'+(DB.seq.client++)},data));
+ closeModal();rerender();toast('Client saved: '+name);
+}
+function saveCompany(){
+ DB.company.name=$('#co_name').value;DB.company.brand=$('#co_brand').value;DB.company.gstin=$('#co_gst').value;
+ toast('Company profile saved');
+}
+
+/* ============================================================
+   USERS (Super Admin)
+   ============================================================ */
+VIEWS.usersadmin={title:'Users',crumb:'Super Admins and Field Engineers',
+render(){
+ const rows=DB.users.map(u=>{
+  const caps=DB.assets.filter(a=>a.testedBy===u.id).length;
+  return `<tr><td><b>${esc(u.name)}</b><div class="muted" style="font-size:11px">${esc(u.email)}</div></td>
+   <td>${badge(u.role)}</td><td>${esc(u.phone||'—')}</td>
+   <td>${DB.projects.filter(p=>p.team.includes(u.id)||p.managerId===u.id).map(p=>'<span class="tag">'+esc(p.id)+'</span>').join('')||'<span class="muted">—</span>'}</td>
+   <td>${caps}</td>
+   <td>${u.active?badge('Verified').replace('Verified','Active'):badge('Rejected').replace('Rejected','Disabled')}</td>
+   <td class="flex"><button class="btn btn-sm" onclick="editUser('${u.id}')">Edit</button>
+    ${u.id===ME.id?'':`<button class="btn btn-sm btn-danger" onclick="toggleUser('${u.id}')">${u.active?'Disable':'Enable'}</button>`}</td></tr>`;
+ }).join('');
+ return `
+ <div class="kpis">
+  <div class="kpi purple"><div class="lbl">Super Admins</div><div class="val">${DB.users.filter(u=>u.role==='Super Admin').length}</div></div>
+  <div class="kpi blue"><div class="lbl">Field Engineers</div><div class="val">${DB.users.filter(u=>u.role==='Field Engineer').length}</div></div>
+  <div class="kpi teal"><div class="lbl">Active</div><div class="val">${DB.users.filter(u=>u.active).length}</div></div>
+ </div>
+ <div class="info"><b>Roles:</b> Field Engineers see only the dashboard for their own projects, the scan &amp; test screen, and their assigned project list — they can add assets and record test parameters, nothing else. Super Admins have every module, including verification, masters, Blancco configuration and reports.</div>
+ <div class="card"><div class="card-h"><h3>All users</h3><button class="btn btn-p btn-sm" onclick="editUser()">+ New user</button></div>
+  <div class="tblwrap"><table><thead><tr><th>User</th><th>Role</th><th>Phone</th><th>Projects</th><th>Assets captured</th><th>State</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}};
+function editUser(id){
+ const u=id?DB.users.find(x=>x.id===id):null;
+ openModal(`<div class="modal-h"><h3>${u?'Edit':'New'} user</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div class="frow"><div><label class="f">Full name</label><input id="us_name" value="${u?esc(u.name):''}"></div>
+   <div><label class="f">Role</label><select id="us_role"><option ${u&&u.role==='Super Admin'?'selected':''}>Super Admin</option><option ${!u||u.role==='Field Engineer'?'selected':''}>Field Engineer</option></select></div></div>
+  <div class="frow"><div><label class="f">Email</label><input id="us_email" value="${u?esc(u.email):''}"></div>
+   <div><label class="f">Phone</label><input id="us_phone" value="${u?esc(u.phone||''):''}"></div></div>
+  <div class="muted" style="font-size:12px;margin-top:10px">This demo signs in by selecting a user. A production deployment would authenticate against your identity provider and map these same two roles.</div>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-p" onclick="saveUser(${u?"'"+u.id+"'":'null'})">Save</button></div>`);
+}
+function saveUser(id){
+ const name=$('#us_name').value.trim();if(!name){toast('Name is required');return;}
+ const data={name:name,role:$('#us_role').value,email:$('#us_email').value||'—',phone:$('#us_phone').value||'—'};
+ if(id){Object.assign(DB.users.find(x=>x.id===id),data);if(ME.id===id){ME=DB.users.find(x=>x.id===id);$('#whoami').textContent=ME.name+' · '+ME.role;buildNav();}}
+ else DB.users.push(Object.assign({id:'U-'+(DB.seq.user++),active:true},data));
+ closeModal();rerender();toast('User saved: '+name);
+}
+function toggleUser(id){
+ const u=DB.users.find(x=>x.id===id);
+ if(u.active&&DB.projects.some(p=>p.status==='Active'&&(p.team.includes(id)||p.managerId===id))){
+  toast('Cannot disable '+u.name+' — assigned to an active project');return;
+ }
+ u.active=!u.active;rerender();toast(u.name+(u.active?' enabled':' disabled'));
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
+</script>
+<script src="/static/persist.js"></script>
 </body>
 </html>

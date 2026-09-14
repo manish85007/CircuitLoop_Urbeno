@@ -7,15 +7,15 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.config import COOKIE_NAME, SESSION_HOURS, SESSION_SECRET
 
-serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="circuitloop-crew")
+serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="circuitloop-field")
 
 
-def issue_session(response: Response, crew: dict) -> None:
+def issue_session(response: Response, user: dict) -> None:
     token = serializer.dumps(
         {
-            "crewId": crew["id"],
-            "name": crew["name"],
-            "role": crew["role"],
+            "userId": user["id"],
+            "name": user["name"],
+            "role": user["role"],
             "iat": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -39,13 +39,12 @@ def read_session(request: Request) -> dict | None:
     if not token:
         return None
     try:
-        data = serializer.loads(token, max_age=SESSION_HOURS * 3600)
+        return serializer.loads(token, max_age=SESSION_HOURS * 3600)
     except (BadSignature, SignatureExpired):
         return None
-    return data
 
 
-def require_crew(request: Request) -> dict:
+def require_user(request: Request) -> dict:
     session = read_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Sign in to continue.")
