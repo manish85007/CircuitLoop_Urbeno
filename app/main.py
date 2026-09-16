@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field
 
 from app.auth import clear_session, issue_session, read_session
 from app.blancco import lookup as blancco_lookup
-from app.config import APP_NAME, BRAND, CORS_ORIGINS, ROOT, ensure_dirs
-from app.store import load_state, save_state
+from app.config import APP_NAME, BRAND, CORS_ORIGINS, DATA_DIR, ROOT, STATE_PATH, ensure_dirs
+from app.store import StaleState, load_state, save_state
 
 STATIC_DIR = ROOT / "static"
 
@@ -55,7 +55,16 @@ def _user_from_state(user_id: str) -> dict[str, Any] | None:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "app": APP_NAME, "brand": BRAND}
+    return {
+        "ok": True,
+        "app": APP_NAME,
+        "brand": BRAND,
+        "persist": {
+            "dataDir": str(DATA_DIR),
+            "statePath": str(STATE_PATH),
+            "hasState": STATE_PATH.exists() and STATE_PATH.stat().st_size > 0,
+        },
+    }
 
 
 @app.get("/api/state")
@@ -68,6 +77,11 @@ def put_state(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload.get("state", payload)
     try:
         saved = save_state(body)
+    except StaleState as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TypeError as exc:

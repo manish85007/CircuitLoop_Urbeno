@@ -8,12 +8,23 @@
       body: body ? JSON.stringify(body) : undefined,
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
+      if (!res.ok) {
+        const err = new Error(data.error || data.detail || "Request failed (" + res.status + ")");
+        err.status = res.status;
+        err.payload = data;
+        throw err;
+      }
       return data;
     });
 
   let persistTimer = null;
   let ready = false;
+
+  function applyState(state) {
+    if (!state || typeof state !== "object") return;
+    Object.keys(DB).forEach((k) => delete DB[k]);
+    Object.assign(DB, state);
+  }
 
   function persistSoon() {
     if (!ready) return;
@@ -21,12 +32,32 @@
     persistTimer = setTimeout(persistNow, 400);
   }
 
+  async function hydrateFromServer() {
+    const data = await api("GET", "/api/state");
+    if (data.state && Array.isArray(data.state.projects)) {
+      applyState(data.state);
+      return true;
+    }
+    return false;
+  }
+
   async function persistNow() {
     if (typeof DB === "undefined") return;
     persistTimer = null;
     try {
-      await api("PUT", "/api/state", { state: DB });
+      const data = await api("PUT", "/api/state", { state: DB });
+      if (data.state) applyState(data.state);
     } catch (err) {
+      if (err.status === 409) {
+        try {
+          await hydrateFromServer();
+        } catch (e) {}
+        if (typeof toast === "function") {
+          toast("Register was updated elsewhere. Reloaded the saved copy.");
+        }
+        if (typeof origRerender === "function") origRerender();
+        return;
+      }
       if (typeof toast === "function") toast("Could not save to CircuitLoop: " + err.message);
     }
   }
@@ -85,16 +116,16 @@
   });
 
   async function bootFromServer() {
+    let hydrated = false;
     try {
-      const data = await api("GET", "/api/state");
-      if (data.state && Array.isArray(data.state.projects)) {
-        Object.keys(DB).forEach((k) => delete DB[k]);
-        Object.assign(DB, data.state);
-      } else {
+      hydrated = await hydrateFromServer();
+      if (!hydrated) {
         await persistNow();
       }
     } catch (err) {
       if (typeof toast === "function") toast(err.message);
+      if (typeof renderLogin === "function") renderLogin();
+      return;
     }
     let sessionUser = null;
     try {

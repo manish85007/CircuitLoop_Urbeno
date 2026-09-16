@@ -53,6 +53,7 @@ def test_health(client):
     assert res.status_code == 200
     assert res.json()["app"] == "CircuitLoop"
     assert res.json()["brand"] == "Urbeno"
+    assert res.json()["persist"]["dataDir"]
 
 
 def test_index_is_original_field_ui(client):
@@ -84,6 +85,30 @@ def test_state_roundtrip(client):
 
     loaded = client.get("/api/state")
     assert loaded.json()["state"]["projects"][0]["id"] == "PRJ-1001"
+    assert loaded.json()["state"]["_rev"] == 1
+
+
+def test_state_rejects_stale_revision(client):
+    first = client.put("/api/state", json={"state": SEED})
+    assert first.status_code == 200
+    assert first.json()["state"]["_rev"] == 1
+
+    second = dict(SEED)
+    second["projects"] = list(SEED["projects"]) + [
+        {**SEED["projects"][0], "id": "PRJ-1002", "name": "Kept"}
+    ]
+    second["_rev"] = 1
+    ok = client.put("/api/state", json={"state": second})
+    assert ok.status_code == 200
+    assert ok.json()["state"]["_rev"] == 2
+
+    stale = dict(SEED)
+    stale["_rev"] = 1
+    res = client.put("/api/state", json={"state": stale})
+    assert res.status_code == 409
+    still = client.get("/api/state")
+    assert still.json()["state"]["projects"][1]["id"] == "PRJ-1002"
+    assert still.json()["state"]["_rev"] == 2
 
 
 def test_state_rejects_partial(client):
