@@ -26,6 +26,7 @@
   let persistInFlight = null;
   let persistQueued = false;
   let ready = false;
+  let applyingRemote = false;
 
   function applyState(state) {
     if (!state || typeof state !== "object") return;
@@ -33,8 +34,18 @@
     Object.assign(DB, state);
   }
 
+  function refreshView() {
+    if (typeof origRerender !== "function") return;
+    applyingRemote = true;
+    try {
+      origRerender();
+    } finally {
+      applyingRemote = false;
+    }
+  }
+
   function persistSoon() {
-    if (!ready) return;
+    if (!ready || applyingRemote) return;
     clearTimeout(persistTimer);
     persistTimer = setTimeout(persistNow, 400);
   }
@@ -48,19 +59,43 @@
     return false;
   }
 
+  async function pullIfNewer() {
+    if (!ready || persistInFlight || applyingRemote) return false;
+    try {
+      const data = await api("GET", "/api/state?ts=" + Date.now());
+      const remote = data.state;
+      if (!remote || !Array.isArray(remote.projects)) return false;
+      const remoteRev = Number(remote._rev || 0);
+      const localRev = Number(DB._rev || 0);
+      if (remoteRev > localRev) {
+        applyState(remote);
+        refreshView();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function isStaleConflict(err) {
     if (!err) return false;
     if (err.status === 409) return true;
     return /newer copy of the register/i.test(String(err.message || ""));
   }
 
+  function rosterKey(state) {
+    const ids = (list) => (list || []).map((row) => row && row.id).filter(Boolean).join(",");
+    return ids(state.projects) + "|" + ids(state.users) + "|" + ids(state.assets);
+  }
+
   async function writeState() {
     if (typeof DB === "undefined") return;
     const revAtSend = DB._rev;
+    const before = rosterKey(DB);
     const data = await api("PUT", "/api/state", { state: DB });
     if (!data.state) return;
     if (revAtSend == null || DB._rev === revAtSend) {
       applyState(data.state);
+      if (rosterKey(data.state) !== before) refreshView();
       return;
     }
     // Local edits landed while the PUT was in flight — keep them, take the new rev.
@@ -87,7 +122,7 @@
               await hydrateFromServer();
             } catch (e) {}
           }
-          if (typeof origRerender === "function") origRerender();
+          refreshView();
           return;
         }
         if (typeof toast === "function") toast("Could not save to CircuitLoop: " + err.message);
@@ -108,7 +143,7 @@
   window.login = function (uid) {
     origLogin(uid);
     api("POST", "/api/session", { userId: uid }).catch(() => {});
-    persistSoon();
+    pullIfNewer();
   };
 
   const origLogout = window.logout;
@@ -126,7 +161,6 @@
   const origShow = window.show;
   window.show = function (v) {
     origShow(v);
-    persistSoon();
   };
 
   if (window.BLANCCO && BLANCCO.fetchBySerial) {
@@ -157,6 +191,13 @@
         keepalive: true,
       });
     } catch (e) {}
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pullIfNewer();
+  });
+  window.addEventListener("pageshow", () => {
+    pullIfNewer();
   });
 
   async function bootFromServer() {

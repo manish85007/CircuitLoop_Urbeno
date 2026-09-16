@@ -10,6 +10,7 @@ from app.config import STATE_PATH, ensure_dirs
 _lock = Lock()
 
 REQUIRED = ("company", "users", "clients", "projects", "assets")
+LIST_KEYS = ("users", "clients", "projects", "assets", "manifests")
 
 # Fingerprint of static/index.html `const DB={...}` + mkAsset demo rows.
 # A hydrated client always has `_rev >= 1`; only this blob is posted with no rev.
@@ -70,6 +71,69 @@ def _would_drop_records(current: dict[str, Any], incoming: dict[str, Any]) -> bo
     return bool(lost_users or lost_serials)
 
 
+def _merge_by_id(incoming_list: Any, current_list: Any) -> list[Any]:
+    """Keep every id from current; incoming overwrites overlapping ids and appends new ones."""
+    by_id: dict[str, dict[str, Any]] = {}
+    incoming_only: list[Any] = []
+    for row in current_list or []:
+        if isinstance(row, dict) and row.get("id"):
+            by_id[str(row["id"])] = row
+    for row in incoming_list or []:
+        if isinstance(row, dict) and row.get("id"):
+            by_id[str(row["id"])] = row
+        elif isinstance(row, dict):
+            incoming_only.append(row)
+    out: list[Any] = []
+    seen: set[str] = set()
+    for row in current_list or []:
+        if not isinstance(row, dict) or not row.get("id"):
+            out.append(row)
+            continue
+        key = str(row["id"])
+        if key in seen:
+            continue
+        out.append(by_id[key])
+        seen.add(key)
+    for row in incoming_list or []:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        key = str(row["id"])
+        if key in seen:
+            continue
+        out.append(row)
+        seen.add(key)
+    out.extend(incoming_only)
+    return out
+
+
+def _merge_seq(current: Any, incoming: Any) -> dict[str, Any]:
+    cur = current if isinstance(current, dict) else {}
+    inc = incoming if isinstance(incoming, dict) else {}
+    keys = set(cur) | set(inc)
+    out: dict[str, Any] = {}
+    for key in keys:
+        cv, iv = cur.get(key), inc.get(key)
+        try:
+            out[key] = max(int(cv or 0), int(iv or 0))
+        except (TypeError, ValueError):
+            out[key] = iv if iv is not None else cv
+    return out
+
+
+def merge_state(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Union collections so a stale device cannot drop projects created elsewhere."""
+    out = dict(incoming)
+    for key in LIST_KEYS:
+        out[key] = _merge_by_id(incoming.get(key), current.get(key))
+    out["seq"] = _merge_seq(current.get("seq"), incoming.get("seq"))
+    for key, value in current.items():
+        if key in ("_rev", "_savedAt"):
+            continue
+        if key not in out:
+            out[key] = value
+    return out
+
+
 def load_state() -> dict[str, Any] | None:
     ensure_dirs()
     if not STATE_PATH.exists():
@@ -96,14 +160,18 @@ def save_state(state: dict[str, Any]) -> dict[str, Any]:
                 current = json.loads(raw)
         if current:
             incoming_rev = int(state.get("_rev") or 0)
+            cur_rev = int(current.get("_rev") or 0)
             # Unhydrated PUTs: the compiled demo (no `_rev`) or any body that
-            # would delete users/serials. Hydrated clients (`_rev >= 1`) last-write-wins,
-            # including overlapping same-rev saves from persistNow + beforeunload.
+            # would delete users/serials.
             if incoming_rev < 1 and (
                 is_compiled_demo_seed(state) or _would_drop_records(current, state)
             ):
                 raise StaleState(current)
-            state["_rev"] = int(current.get("_rev") or 0) + 1
+            # Older hydrated copy from another device/tab: keep local edits
+            # and restore any records the stale body omitted (e.g. PRJ-1004).
+            if incoming_rev < cur_rev:
+                state = merge_state(current, state)
+            state["_rev"] = cur_rev + 1
         else:
             state["_rev"] = 1
         state["_savedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

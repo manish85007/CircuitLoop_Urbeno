@@ -152,9 +152,14 @@ async def validation_error(_: Request, exc: RequestValidationError) -> JSONRespo
     return JSONResponse({"error": f"Check the {loc} field and try again."}, status_code=422)
 
 
+@app.get("/static/persist.js")
+def persist_js() -> FileResponse:
+    return FileResponse(STATIC_DIR / "persist.js", media_type="text/javascript", headers=NO_STORE)
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers=NO_STORE)

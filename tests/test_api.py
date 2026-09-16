@@ -69,9 +69,11 @@ def test_index_is_original_field_ui(client):
     assert "/static/persist.js" in res.text
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
+    assert "no-store" in persist.headers.get("cache-control", "")
     assert 'cache: "no-store"' in persist.text or "cache: 'no-store'" in persist.text
     assert "persistInFlight" in persist.text
     assert "persistQueued" in persist.text
+    assert "pullIfNewer" in persist.text
     assert "Check in on site" not in res.text
 
 
@@ -163,6 +165,33 @@ def test_state_rejects_compiled_demo_seed(client):
     ok = client.put("/api/state", json={"state": nxt})
     assert ok.status_code == 200
     assert any(u["id"] == "U-6" for u in ok.json()["state"]["users"])
+
+
+def test_stale_put_keeps_projects_created_on_another_device(client):
+    first = client.put("/api/state", json={"state": SEED})
+    assert first.status_code == 200
+
+    device_a = dict(first.json()["state"])
+    device_a["projects"] = list(device_a["projects"]) + [
+        {**SEED["projects"][0], "id": "PRJ-1004", "name": "MERIDIAN U BUILDING", "team": ["U-6"]}
+    ]
+    device_a["seq"] = {**SEED["seq"], "project": 1005}
+    saved = client.put("/api/state", json={"state": device_a})
+    assert saved.status_code == 200
+    assert saved.json()["state"]["_rev"] == 2
+
+    device_b = dict(SEED)
+    device_b["_rev"] = 1
+    device_b["projects"] = list(SEED["projects"]) + [
+        {**SEED["projects"][0], "id": "PRJ-1005", "name": "Local only on device B"}
+    ]
+    merged = client.put("/api/state", json={"state": device_b})
+    assert merged.status_code == 200
+    ids = [p["id"] for p in merged.json()["state"]["projects"]]
+    assert "PRJ-1004" in ids
+    assert "PRJ-1005" in ids
+    still = client.get("/api/state")
+    assert {p["id"] for p in still.json()["state"]["projects"]} >= {"PRJ-1001", "PRJ-1004", "PRJ-1005"}
 
 
 def test_empty_store_accepts_compiled_seed(client):
