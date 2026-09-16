@@ -3,8 +3,13 @@
   const api = (method, path, body) =>
     fetch(path, {
       method,
+      cache: "no-store",
       credentials: "include",
-      headers: body ? { "Content-Type": "application/json" } : {},
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
@@ -33,7 +38,7 @@
   }
 
   async function hydrateFromServer() {
-    const data = await api("GET", "/api/state");
+    const data = await api("GET", "/api/state?ts=" + Date.now());
     if (data.state && Array.isArray(data.state.projects)) {
       applyState(data.state);
       return true;
@@ -49,9 +54,12 @@
       if (data.state) applyState(data.state);
     } catch (err) {
       if (err.status === 409) {
-        try {
-          await hydrateFromServer();
-        } catch (e) {}
+        if (err.payload && err.payload.state) applyState(err.payload.state);
+        else {
+          try {
+            await hydrateFromServer();
+          } catch (e) {}
+        }
         if (typeof toast === "function") {
           toast("Register was updated elsewhere. Reloaded the saved copy.");
         }
@@ -103,10 +111,11 @@
   }
 
   window.addEventListener("beforeunload", () => {
-    if (!ready || typeof DB === "undefined") return;
+    if (!ready || typeof DB === "undefined" || DB._rev == null) return;
     try {
       fetch("/api/state", {
         method: "PUT",
+        cache: "no-store",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state: DB }),
@@ -119,6 +128,7 @@
     let hydrated = false;
     try {
       hydrated = await hydrateFromServer();
+      // Only write the compiled demo seed when the server file is truly empty.
       if (!hydrated) {
         await persistNow();
       }

@@ -16,6 +16,14 @@ from app.config import APP_NAME, BRAND, CORS_ORIGINS, DATA_DIR, ROOT, STATE_PATH
 from app.store import StaleState, load_state, save_state
 
 STATIC_DIR = ROOT / "static"
+NO_STORE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+}
+
+
+def api_json(payload: dict[str, Any], status: int = 200) -> JSONResponse:
+    return JSONResponse(payload, status_code=status, headers=NO_STORE)
 
 
 @asynccontextmanager
@@ -54,39 +62,38 @@ def _user_from_state(user_id: str) -> dict[str, Any] | None:
 
 
 @app.get("/api/health")
-def health() -> dict[str, Any]:
-    return {
-        "ok": True,
-        "app": APP_NAME,
-        "brand": BRAND,
-        "persist": {
-            "dataDir": str(DATA_DIR),
-            "statePath": str(STATE_PATH),
-            "hasState": STATE_PATH.exists() and STATE_PATH.stat().st_size > 0,
-        },
-    }
+def health() -> JSONResponse:
+    return api_json(
+        {
+            "ok": True,
+            "app": APP_NAME,
+            "brand": BRAND,
+            "persist": {
+                "dataDir": str(DATA_DIR),
+                "statePath": str(STATE_PATH),
+                "hasState": STATE_PATH.exists() and STATE_PATH.stat().st_size > 0,
+            },
+        }
+    )
 
 
 @app.get("/api/state")
-def get_state() -> dict[str, Any]:
-    return {"state": load_state()}
+def get_state() -> JSONResponse:
+    return api_json({"state": load_state()})
 
 
 @app.put("/api/state")
-def put_state(payload: dict[str, Any]) -> dict[str, Any]:
+def put_state(payload: dict[str, Any]) -> JSONResponse:
     body = payload.get("state", payload)
     try:
         saved = save_state(body)
     except StaleState as exc:
-        raise HTTPException(
-            status_code=409,
-            detail=str(exc),
-        ) from exc
+        return api_json({"error": str(exc), "state": exc.current}, 409)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TypeError as exc:
         raise HTTPException(status_code=400, detail="State must be JSON.") from exc
-    return {"ok": True, "state": saved}
+    return api_json({"ok": True, "state": saved})
 
 
 @app.post("/api/session")

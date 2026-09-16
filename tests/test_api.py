@@ -67,6 +67,9 @@ def test_index_is_original_field_ui(client):
     assert "IT Asset Testing" in res.text
     assert "Scan &amp; Test" in res.text or "Scan & Test" in res.text
     assert "/static/persist.js" in res.text
+    persist = client.get("/static/persist.js")
+    assert persist.status_code == 200
+    assert 'cache: "no-store"' in persist.text or "cache: 'no-store'" in persist.text
     assert "Check in on site" not in res.text
 
 
@@ -86,6 +89,7 @@ def test_state_roundtrip(client):
     loaded = client.get("/api/state")
     assert loaded.json()["state"]["projects"][0]["id"] == "PRJ-1001"
     assert loaded.json()["state"]["_rev"] == 1
+    assert "no-store" in loaded.headers.get("cache-control", "")
 
 
 def test_state_rejects_stale_revision(client):
@@ -106,6 +110,7 @@ def test_state_rejects_stale_revision(client):
     stale["_rev"] = 1
     res = client.put("/api/state", json={"state": stale})
     assert res.status_code == 409
+    assert res.json()["state"]["projects"][1]["id"] == "PRJ-1002"
     still = client.get("/api/state")
     assert still.json()["state"]["projects"][1]["id"] == "PRJ-1002"
     assert still.json()["state"]["_rev"] == 2
