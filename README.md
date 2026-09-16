@@ -43,7 +43,7 @@ docker run --rm -p 43180:8080 -e PORT=8080 circuitloop
 | `BLANCCO_API_KEY` | Live Blancco Management Console | empty → demo simulation |
 | `CORS_ORIGINS` | Allowed origins | `*` |
 
-5. Add a volume mounted at `/data` and set `DATA_DIR=/data` so the asset register survives restarts.
+5. Production mounts a volume at `/data` with `DATA_DIR=/data` so the asset register survives restarts.
 6. Health check path: `/api/health`.
 
 No Railway token is required to develop or to push Git.
