@@ -506,7 +506,48 @@ function testProgress(a){
  return {done,total:params.length,pct:params.length?Math.round(done/params.length*100):0};
 }
 function isTestComplete(a){const p=testProgress(a);return p.done===p.total;}
-function blanccoRequired(a){return isBlanccoCat(a.category);}
+function blanccoRequired(a){return isBlanccoCat(a.category)&&!isNoSerialValue(a.serial);}
+function isBareNoSerial(serial){
+ const s=String(serial||'').trim().replace(/\s+/g,'');
+ return !s || /^noserial$/i.test(s);
+}
+function parseNoSerialIndex(serial){
+ const m=/^noserial-(\d+)$/i.exec(String(serial||'').trim().replace(/\s+/g,''));
+ return m?+m[1]:null;
+}
+function isNoSerialValue(serial){
+ return isBareNoSerial(serial)||parseNoSerialIndex(serial)!=null;
+}
+function nextNoSerial(projectId){
+ let max=0;
+ (DB.assets||[]).forEach(a=>{
+  if(a.projectId!==projectId)return;
+  const n=parseNoSerialIndex(a.serial);
+  if(n)max=Math.max(max,n);
+ });
+ return 'NoSerial-'+(max+1);
+}
+function assignNoSerial(serial,projectId){
+ if(isBareNoSerial(serial))return nextNoSerial(projectId);
+ const n=parseNoSerialIndex(serial);
+ if(n)return 'NoSerial-'+n;
+ return String(serial||'').trim();
+}
+function findAssetForScan(serial,projectId){
+ const raw=String(serial||'').trim();
+ if(isBareNoSerial(raw))return null;
+ const s=raw.toLowerCase();
+ const pool=parseNoSerialIndex(raw)!=null?(DB.assets||[]).filter(a=>a.projectId===projectId):(DB.assets||[]);
+ return pool.find(a=>String(a.serial||'').toLowerCase()===s||String(a.usn).toLowerCase()===s);
+}
+function serialTaken(serial,projectId){
+ const s=String(serial||'').trim().toLowerCase();
+ if(!s)return false;
+ if(parseNoSerialIndex(serial)!=null){
+  return (DB.assets||[]).some(a=>a.projectId===projectId&&String(a.serial||'').toLowerCase()===s);
+ }
+ return (DB.assets||[]).some(a=>String(a.serial||'').toLowerCase()===s);
+}
 function blanccoOK(a){return !!(a.blancco&&a.blancco.status==='Erased');}
 
 /* ============================================================
@@ -790,7 +831,7 @@ render(){
  return `
  <div class="scanbox">
   <div class="flex" style="justify-content:space-between;margin-bottom:10px">
-   <div style="font-weight:600;font-size:15px">⌁ Scan or key in a serial number</div>
+   <div style="font-weight:600;font-size:15px">⌁ Scan, type a serial, or capture with no serial</div>
    <select id="projsel" onchange="ACTIVE_PROJECT=this.value;rerender()" style="max-width:340px">
      ${projs.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.id)} — ${esc(x.name)}</option>`).join('')}
    </select>
@@ -803,7 +844,8 @@ render(){
      onkeydown="if(event.key==='Enter')doScan()" style="flex:1;min-width:180px">
    <button class="btn btn-p" onclick="doScan()">Enter</button>
   </div>
-  <div class="hint">Camera scanning reads Code-128, Code-39, EAN, UPC and QR — use <b>Batch</b> mode to register a whole trolley without stopping. USB / Bluetooth barcode guns also work: they type the serial and press Enter. Known serials open the saved test sheet, new ones open registration.</div>
+  <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="captureNoSerial()">No serial — physical / no-power check</button>
+  <div class="hint">Camera scanning reads Code-128, Code-39, EAN, UPC and QR — use <b>Batch</b> mode to register a whole trolley without stopping. USB / Bluetooth barcode guns also work: they type the serial and press Enter. Known serials open the saved test sheet, new ones open registration. No factory serial or no power: tap <b>No serial — physical / no-power check</b> (or type <span class="tag">NoSerial</span> / leave the box empty and press Enter). The app assigns <b>NoSerial-1</b>, <b>NoSerial-2</b>, … per project so two sites do not collide.</div>
  </div>
  <div class="card" style="margin-top:18px"><div class="card-h">
    <h3>${esc(p.name)} <span class="muted" style="font-weight:400">· ${esc(clientName(p.clientId))} · ${esc(p.site)}</span></h3>
@@ -823,16 +865,20 @@ render(){
      </div>
    </div>
    <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Asset</th><th>Status</th><th>Test progress</th><th>Grade</th><th>Blancco</th><th>Action</th></tr></thead>
-   <tbody>${rows||'<tr><td colspan=7 class="muted">Nothing here yet — scan a serial above to register the first asset.</td></tr>'}</tbody></table></div></div>`;
+   <tbody>${rows||'<tr><td colspan=7 class="muted">Nothing here yet — scan a serial, or use No serial — physical check for units with no readable serial.</td></tr>'}</tbody></table></div></div>`;
 },
 after(){const el=$('#scanin');if(el)el.focus();}};
 
 function doScan(){
  const el=$('#scanin');
  const serial=String(el.value||'').trim();
- if(!serial){toast('Scan or type a serial number first');return;}
+ if(isBareNoSerial(serial)){
+  el.value='';
+  captureNoSerial();
+  return;
+ }
  el.value='';
- const existing=DB.assets.find(a=>a.serial.toLowerCase()===serial.toLowerCase()||String(a.usn).toLowerCase()===serial.toLowerCase());
+ const existing=findAssetForScan(serial,ACTIVE_PROJECT);
  if(existing){
   if(ME.role==='Field Engineer'&&!myProjectIds().includes(existing.projectId)){
    toast(serial+' belongs to '+existing.projectId+', which is not assigned to you');return;
@@ -842,6 +888,10 @@ function doScan(){
   return;
  }
  registerAsset(serial);
+}
+function captureNoSerial(){
+ if(!ACTIVE_PROJECT){toast('Pick a project first');return;}
+ registerAsset(nextNoSerial(ACTIVE_PROJECT),true);
 }
 let SCANNER=null,SCAN_CAMS=[],SCAN_IDX=0,SCAN_MODE='single',SCAN_LAST='',SCAN_LAST_T=0,SCAN_HITS=[],SCAN_TORCH=false;
 function scannerAvailable(){return typeof Html5Qrcode!=='undefined';}
@@ -977,21 +1027,23 @@ function onScanHit(text){
  batchCapture(serial);
 }
 function batchCapture(serial){
- const existing=DB.assets.find(a=>a.serial.toLowerCase()===serial.toLowerCase()||String(a.usn).toLowerCase()===serial.toLowerCase());
+ const existing=findAssetForScan(serial,ACTIVE_PROJECT);
  if(existing){
   SCAN_HITS.unshift({serial:serial,note:'already captured ('+existing.status+')',ok:false});
   paintHits();return;
  }
+ const assigned=assignNoSerial(serial,ACTIVE_PROJECT);
  const cat=($('#batchcat')&&$('#batchcat').value)||DB.categories[0];
- const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,brand:'—',model:'—',serial:serial,
+ const noSer=isNoSerialValue(assigned);
+ const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,brand:'—',model:'—',serial:assigned,
   assetTag:'',cosmetic:'B',status:'Registered',tests:{},specs:{},remarks:'',
   testedBy:null,testedAt:null,verifiedBy:null,verifiedAt:null,blancco:null,
-  history:[{ts:stamp(),by:ME.name,ev:'Quick-captured by camera scan (batch mode)'}]};
+  history:[{ts:stamp(),by:ME.name,ev:noSer?'Quick-captured without factory serial ('+assigned+') — physical / no-power check':'Quick-captured by camera scan (batch mode)'}]};
  recomputeGrade(a);
  DB.assets.push(a);
- SCAN_HITS.unshift({serial:serial,note:a.usn+' · '+cat,ok:true});
+ SCAN_HITS.unshift({serial:assigned,note:a.usn+' · '+cat,ok:true});
  paintHits();
- if(isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlanccoQuiet(a.id);
+ if(!noSer&&isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlanccoQuiet(a.id);
 }
 function pullBlanccoQuiet(id){try{pullBlancco(id,true);}catch(e){}}
 function paintHits(){
@@ -1004,15 +1056,19 @@ function focusScanInput(){
  const el=$('#scanin');
  if(el){el.focus();try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}}
 }
-function registerAsset(serial){
+function registerAsset(serial,noSerial){
  const p=projectById(ACTIVE_PROJECT);
  const cats=p.scope.length?p.scope.map(s=>s.category):DB.categories;
+ const assigned=noSerial||isNoSerialValue(serial)?assignNoSerial(serial,ACTIVE_PROJECT):String(serial||'').trim();
+ const noSer=isNoSerialValue(assigned);
  openModal(`
- <div class="modal-h"><h3>➕ Register asset — ${esc(serial)}</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-h"><h3>➕ Register asset — ${esc(assigned)}</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
-   <div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given an Urbeno USN.</div>
+   ${noSer
+     ? `<div class="info">No factory serial on this unit. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> as <b>${esc(assigned)}</b> (next index on this project). Capture brand, model, cosmetic grade and the physical / no-power checklist. Blancco is not required.</div>`
+     : `<div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given an Urbeno USN.</div>`}
    <div class="frow">
-     <div><label class="f">Serial number (scanned)</label><input id="ra_serial" value="${esc(serial)}"></div>
+     <div><label class="f">${noSer?'Assigned serial (no factory SN)':'Serial number (scanned)'}</label><input id="ra_serial" value="${esc(assigned)}" ${noSer?'readonly':''}></div>
      <div><label class="f">Category</label><select id="ra_cat" onchange="raSpecs()">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
    </div>
    <div class="frow">
@@ -1024,7 +1080,7 @@ function registerAsset(serial){
      <div><label class="f">Cosmetic grade</label><select id="ra_cos"><option value="A">A — Like new</option><option value="B" selected>B — Light wear</option><option value="C">C — Visible wear</option><option value="D">D — Damaged</option></select></div>
    </div>
    <div id="ra_specs"></div>
-   <label class="f">Remarks (optional)</label><textarea id="ra_rem" rows="2" maxlength="500"></textarea>
+   <label class="f">Remarks (optional)</label><textarea id="ra_rem" rows="2" maxlength="500" placeholder="${noSer?'e.g. No power, label missing, physical condition…':''}"></textarea>
  </div>
  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
    <button class="btn btn-p" onclick="saveRegister()">Register &amp; start test</button></div>`);
@@ -1036,23 +1092,27 @@ function raSpecs(){
   specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="ras_${i}" data-f="${esc(f)}"></div>`).join('')+'</div>';
 }
 function saveRegister(){
- const serial=String($('#ra_serial').value||'').trim();
+ let serial=assignNoSerial($('#ra_serial').value,ACTIVE_PROJECT);
  if(!serial){toast('Serial number is required');return;}
- if(DB.assets.some(a=>a.serial.toLowerCase()===serial.toLowerCase())){toast('Serial '+serial+' already exists in the register');return;}
+ if(serialTaken(serial,ACTIVE_PROJECT)){
+  if(isNoSerialValue(serial)){serial=nextNoSerial(ACTIVE_PROJECT);}
+  else {toast('Serial '+serial+' already exists in the register');return;}
+ }
  const cat=$('#ra_cat').value;
  const specs={};$$('#ra_specs input').forEach(el=>{if(el.value)specs[el.dataset.f]=el.value;});
+ const noSer=isNoSerialValue(serial);
  const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,
   brand:$('#ra_brand').value||'—',model:$('#ra_model').value||'—',serial:serial,
   assetTag:$('#ra_tag').value||'',cosmetic:$('#ra_cos').value,status:'In Testing',
   tests:{},specs:specs,remarks:String($('#ra_rem').value||'').slice(0,500),
   testedBy:ME.id,testedAt:null,verifiedBy:null,verifiedAt:null,blancco:null,
-  history:[{ts:stamp(),by:ME.name,ev:'Asset registered via scan ('+serial+')'}]};
+  history:[{ts:stamp(),by:ME.name,ev:noSer?'Asset registered without factory serial ('+serial+') — physical / no-power check':'Asset registered via scan ('+serial+')'}]};
  recomputeGrade(a);
  DB.assets.push(a);
  closeModal();rerender();
  toast('Registered '+serial+' as '+a.usn);
  openTest(a.id);
- if(isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlancco(a.id,true);
+ if(!noSer&&isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlancco(a.id,true);
 }
 
 /* ---------- Test sheet ---------- */
@@ -1066,7 +1126,7 @@ function openTest(id){
  const locked=a.status==='Verified'&&ME.role!=='Super Admin';
  const rows=params.map(p=>{
   const v=a.tests[p.key]||'';
-  const isB=p.blancco&&isBlanccoCat(a.category);
+  const isB=p.blancco&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial);
   return `<div class="testrow">
    <div><div class="nm">${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</div>
     ${isB?`<div class="muted" style="font-size:11px">Auto-filled from the Blancco report — ${a.blancco?'report '+esc(a.blancco.reportId)+' ('+esc(a.blancco.status)+')':'no report linked yet'}</div>`:''}
@@ -1086,7 +1146,9 @@ function openTest(id){
  <div class="modal-b">
    <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''}</div>
    ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by Super Admin:</b> ${esc(a.rejectNote||'')}</div>`:''}
-   ${isBlanccoCat(a.category)?(a.blancco
+   ${isNoSerialValue(a.serial)
+     ? `<div class="info">No factory serial — physical / no-power check (<b>${esc(a.serial)}</b>). Record cosmetic grade and every parameter. Mark <b>Powers on</b> Fail if the unit has no power. Blancco is not required to submit.</div>`
+     : isBlanccoCat(a.category)?(a.blancco
      ? `<div class="${a.blancco.status==='Erased'?'okbox':'errbox'}">🛡 Blancco <b>${esc(a.blancco.reportId)}</b> — ${esc(a.blancco.status)} · ${esc(a.blancco.standard)} · ${esc(a.blancco.date)}
          <button class="btn btn-sm" style="margin-left:8px" onclick="viewBlancco('${a.id}')">View report</button>
          <button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Re-pull</button></div>`
@@ -1137,7 +1199,7 @@ function markAllPass(id){
  const a=DB.assets.find(x=>x.id===id);
  const bp=paramsFor(a.category).find(p=>p.blancco);
  paramsFor(a.category).forEach(p=>{
-  if(p.blancco&&isBlanccoCat(a.category))return;   /* Blancco parameter is API-owned */
+  if(p.blancco&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial))return;   /* Blancco parameter is API-owned */
   a.tests[p.key]='Pass';
  });
  recomputeGrade(a);openTest(a.id);
@@ -2142,6 +2204,6 @@ function toggleUser(id){
    ============================================================ */
 document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
 </script>
-<script src="/static/persist.js?v=sync2"></script>
+<script src="/static/persist.js?v=noserial1"></script>
 </body>
 </html>

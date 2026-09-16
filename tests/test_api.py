@@ -74,7 +74,10 @@ def test_index_is_original_field_ui(client):
     assert "persistInFlight" in persist.text
     assert "persistQueued" in persist.text
     assert "pullIfNewer" in persist.text
-    assert "Check in on site" not in res.text
+    assert "captureNoSerial" in res.text
+    assert "nextNoSerial" in res.text
+    assert "NoSerial-" in res.text
+    assert "physical / no-power" in res.text
 
 
 def test_jobs_api_removed(client):
