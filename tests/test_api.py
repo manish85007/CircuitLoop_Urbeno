@@ -70,6 +70,8 @@ def test_index_is_original_field_ui(client):
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
     assert 'cache: "no-store"' in persist.text or "cache: 'no-store'" in persist.text
+    assert "persistInFlight" in persist.text
+    assert "persistQueued" in persist.text
     assert "Check in on site" not in res.text
 
 
@@ -92,7 +94,23 @@ def test_state_roundtrip(client):
     assert "no-store" in loaded.headers.get("cache-control", "")
 
 
-def test_state_rejects_stale_revision(client):
+COMPILED_SEED = {
+    **SEED,
+    "users": [
+        {"id": "U-1", "name": "Manish Kumar", "email": "manish85007@gmail.com", "role": "Super Admin", "phone": "", "active": True},
+        {"id": "U-2", "name": "S. Iyer", "email": "s.iyer@urbeno.in", "role": "Super Admin", "phone": "", "active": True},
+        {"id": "U-3", "name": "A. Verma", "email": "a.verma@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
+        {"id": "U-4", "name": "R. Alvarez", "email": "r.alvarez@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
+        {"id": "U-5", "name": "P. Shetty", "email": "p.shetty@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
+    ],
+    "assets": [
+        {"id": "A-1", "serial": "DL5540-88213", "category": "Laptop", "brand": "Dell", "model": "Latitude 5540"},
+        {"id": "A-2", "serial": "LT14-30291", "category": "Laptop", "brand": "Lenovo", "model": "ThinkPad T14 G4"},
+    ],
+}
+
+
+def test_state_last_write_wins_when_behind(client):
     first = client.put("/api/state", json={"state": SEED})
     assert first.status_code == 200
     assert first.json()["state"]["_rev"] == 1
@@ -106,14 +124,52 @@ def test_state_rejects_stale_revision(client):
     assert ok.status_code == 200
     assert ok.json()["state"]["_rev"] == 2
 
-    stale = dict(SEED)
-    stale["_rev"] = 1
-    res = client.put("/api/state", json={"state": stale})
-    assert res.status_code == 409
-    assert res.json()["state"]["projects"][1]["id"] == "PRJ-1002"
+    # Overlapping persistNow / beforeunload: same or older hydrated rev still saves.
+    behind = dict(second)
+    behind["projects"] = list(second["projects"]) + [
+        {**SEED["projects"][0], "id": "PRJ-1003", "name": "From overlapping save"}
+    ]
+    behind["_rev"] = 1
+    res = client.put("/api/state", json={"state": behind})
+    assert res.status_code == 200
+    assert res.json()["state"]["_rev"] == 3
+    assert res.json()["state"]["projects"][2]["id"] == "PRJ-1003"
+
+
+def test_state_rejects_compiled_demo_seed(client):
+    live = dict(SEED)
+    live["users"] = list(SEED["users"]) + [
+        {"id": "U-LEGIT", "name": "Field tester", "email": "tester@urbeno.in", "role": "Field Engineer", "active": True}
+    ]
+    live["assets"] = [{"id": "A-LIVE", "serial": "LIVE-1", "category": "Laptop"}]
+    saved = client.put("/api/state", json={"state": live})
+    assert saved.status_code == 200
+    assert saved.json()["state"]["_rev"] == 1
+
+    wiped = client.put("/api/state", json={"state": COMPILED_SEED})
+    assert wiped.status_code == 409
+    body = wiped.json()
+    assert "newer copy" in body["error"]
+    assert any(u["id"] == "U-LEGIT" for u in body["state"]["users"])
     still = client.get("/api/state")
-    assert still.json()["state"]["projects"][1]["id"] == "PRJ-1002"
-    assert still.json()["state"]["_rev"] == 2
+    assert any(u["id"] == "U-LEGIT" for u in still.json()["state"]["users"])
+    assert still.json()["state"]["_rev"] == 1
+
+    # Hydrated client with matching rev can add a user.
+    nxt = dict(still.json()["state"])
+    nxt["users"] = list(nxt["users"]) + [
+        {"id": "U-6", "name": "New engineer", "email": "new@urbeno.in", "role": "Field Engineer", "active": True}
+    ]
+    ok = client.put("/api/state", json={"state": nxt})
+    assert ok.status_code == 200
+    assert any(u["id"] == "U-6" for u in ok.json()["state"]["users"])
+
+
+def test_empty_store_accepts_compiled_seed(client):
+    first = client.put("/api/state", json={"state": COMPILED_SEED})
+    assert first.status_code == 200
+    assert first.json()["state"]["_rev"] == 1
+    assert any(a["serial"] == "DL5540-88213" for a in first.json()["state"]["assets"])
 
 
 def test_state_rejects_partial(client):

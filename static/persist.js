@@ -23,6 +23,8 @@
     });
 
   let persistTimer = null;
+  let persistInFlight = null;
+  let persistQueued = false;
   let ready = false;
 
   function applyState(state) {
@@ -46,27 +48,59 @@
     return false;
   }
 
+  function isStaleConflict(err) {
+    if (!err) return false;
+    if (err.status === 409) return true;
+    return /newer copy of the register/i.test(String(err.message || ""));
+  }
+
+  async function writeState() {
+    if (typeof DB === "undefined") return;
+    const revAtSend = DB._rev;
+    const data = await api("PUT", "/api/state", { state: DB });
+    if (!data.state) return;
+    if (revAtSend == null || DB._rev === revAtSend) {
+      applyState(data.state);
+      return;
+    }
+    // Local edits landed while the PUT was in flight — keep them, take the new rev.
+    DB._rev = data.state._rev;
+    DB._savedAt = data.state._savedAt;
+    persistSoon();
+  }
+
   async function persistNow() {
     if (typeof DB === "undefined") return;
     persistTimer = null;
-    try {
-      const data = await api("PUT", "/api/state", { state: DB });
-      if (data.state) applyState(data.state);
-    } catch (err) {
-      if (err.status === 409) {
-        if (err.payload && err.payload.state) applyState(err.payload.state);
-        else {
-          try {
-            await hydrateFromServer();
-          } catch (e) {}
+    if (persistInFlight) {
+      persistQueued = true;
+      return persistInFlight;
+    }
+    persistInFlight = (async () => {
+      try {
+        await writeState();
+      } catch (err) {
+        if (isStaleConflict(err)) {
+          if (err.payload && err.payload.state) applyState(err.payload.state);
+          else {
+            try {
+              await hydrateFromServer();
+            } catch (e) {}
+          }
+          if (typeof origRerender === "function") origRerender();
+          return;
         }
-        if (typeof toast === "function") {
-          toast("Register was updated elsewhere. Reloaded the saved copy.");
-        }
-        if (typeof origRerender === "function") origRerender();
-        return;
+        if (typeof toast === "function") toast("Could not save to CircuitLoop: " + err.message);
       }
-      if (typeof toast === "function") toast("Could not save to CircuitLoop: " + err.message);
+    })();
+    try {
+      return await persistInFlight;
+    } finally {
+      persistInFlight = null;
+      if (persistQueued) {
+        persistQueued = false;
+        persistNow();
+      }
     }
   }
 
@@ -112,6 +146,7 @@
 
   window.addEventListener("beforeunload", () => {
     if (!ready || typeof DB === "undefined" || DB._rev == null) return;
+    if (persistInFlight) return;
     try {
       fetch("/api/state", {
         method: "PUT",
