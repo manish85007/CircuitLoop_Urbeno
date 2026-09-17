@@ -15,7 +15,7 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
 COOKIE_NAME = "circuitloop_session"
 SESSION_HOURS = 16
 APP_NAME = "CircuitLoop"
-BRAND = "Urbeno"
+BRAND = "CircuitLoop"
 
 
 def ensure_dirs() -> None:

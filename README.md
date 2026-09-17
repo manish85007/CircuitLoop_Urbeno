@@ -1,6 +1,6 @@
 # CircuitLoop
 
-Urbeno field console for IT asset testing and project management. The UI is the original CircuitLoop Field HTML; FastAPI persists that in-memory `DB` and proxies Blancco lookups.
+Field console for IT asset testing and project management. The UI is CircuitLoop Field; FastAPI persists that in-memory `DB` and proxies Blancco lookups.
 
 ## Run locally
 
@@ -50,7 +50,7 @@ No Railway token is required to develop or to push Git.
 
 ## What this slice does
 
-- Serves CircuitLoop Field (Urbeno wordmark, Scan & Test, projects, register, Blancco, reconciliation, reports, masters, users)
+- Serves CircuitLoop Field (CircuitLoop lockup, Scan & Test, projects, register, Blancco, reconciliation, reports, masters, users)
 - `GET`/`PUT /api/state` persists the UI `DB`
 - Click-to-sign-in session cookie
 - Blancco live lookup via the server (demo simulation if no key)

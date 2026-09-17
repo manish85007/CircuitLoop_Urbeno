@@ -1,1 +1,1 @@
-"""CircuitLoop — Urbeno field API."""
+"""CircuitLoop field API."""

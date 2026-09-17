@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 56" fill="none" role="img" aria-label="CircuitLoop  ITAD ERP Platform">
+  <defs>
+    <linearGradient id="clLockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00B894"/>
+      <stop offset="50%" stop-color="#0077BB"/>
+      <stop offset="100%" stop-color="#5B4CD6"/>
+    </linearGradient>
+    <linearGradient id="clWordGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00B894"/>
+      <stop offset="50%" stop-color="#0077BB"/>
+      <stop offset="100%" stop-color="#5B4CD6"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0 -2) scale(0.28)">
+    <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="url(#clLockGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="68" cy="45" r="5.5" fill="#00B894"/>
+    <circle cx="132" cy="45" r="5.5" fill="#00A3AA"/>
+    <circle cx="155" cy="68" r="4.5" fill="#0077BB"/>
+    <circle cx="45" cy="132" r="4.5" fill="#5B4CD6"/>
+    <circle cx="68" cy="155" r="5.5" fill="#5040C0"/>
+    <circle cx="110" cy="155" r="5.5" fill="#4048D0"/>
+    <circle cx="100" cy="100" r="7" fill="url(#clLockGrad)" opacity="0.9"/>
+    <circle cx="100" cy="100" r="3.5" fill="#F5F7FA"/>
+  </g>
+  <text font-family="'Space Mono', ui-monospace, monospace" x="64" y="30" font-size="22" font-weight="700" fill="url(#clWordGrad)" letter-spacing="-0.3">CircuitLoop</text>
+  <text font-family="Inter, system-ui, sans-serif" x="64" y="48" font-size="8" font-weight="500" fill="#5A6B80" letter-spacing="2">ITAD ERP PLATFORM</text>
+</svg>

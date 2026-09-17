@@ -52,7 +52,7 @@ def test_health(client):
     res = client.get("/api/health")
     assert res.status_code == 200
     assert res.json()["app"] == "CircuitLoop"
-    assert res.json()["brand"] == "Urbeno"
+    assert res.json()["brand"] == "CircuitLoop"
     assert res.json()["persist"]["dataDir"]
 
 
@@ -60,11 +60,13 @@ def test_index_is_original_field_ui(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "CircuitLoop Field" in res.text
-    assert "Urbeno" in res.text
-    assert "RECYCLING HEROES" in res.text
-    assert "DM Serif Display" in res.text
-    assert "#3B6D11" in res.text
-    assert "IT Asset Testing" in res.text
+    assert "ITAD ERP" in res.text
+    assert "Space Mono" in res.text
+    assert "#00D4AA" in res.text
+    assert "RECYCLING HEROES" not in res.text
+    assert "#3B6D11" not in res.text
+    assert "aria-label=\"CircuitLoop\"" in res.text or "aria-label='CircuitLoop'" in res.text
+    assert "IT Asset Disposition" in res.text
     assert "Scan &amp; Test" in res.text or "Scan & Test" in res.text
     assert "/static/persist.js" in res.text
     persist = client.get("/static/persist.js")

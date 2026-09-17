@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" role="img" aria-label="CircuitLoop">
+  <defs>
+    <linearGradient id="clMarkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D4AA"/>
+      <stop offset="50%" stop-color="#0099DD"/>
+      <stop offset="100%" stop-color="#6C5CE7"/>
+    </linearGradient>
+  </defs>
+  <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="url(#clMarkGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M80 100L55 100" stroke="url(#clMarkGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M120 100L145 100" stroke="url(#clMarkGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+  <circle cx="68" cy="45" r="5.5" fill="#00D4AA"/>
+  <circle cx="132" cy="45" r="5.5" fill="#00BBCC"/>
+  <circle cx="155" cy="68" r="4.5" fill="#0099DD"/>
+  <circle cx="45" cy="132" r="4.5" fill="#6C5CE7"/>
+  <circle cx="68" cy="155" r="5.5" fill="#5B4CD6"/>
+  <circle cx="110" cy="155" r="5.5" fill="#4A5BE0"/>
+  <circle cx="100" cy="100" r="7" fill="url(#clMarkGrad)" opacity="0.9"/>
+  <circle cx="100" cy="100" r="3.5" fill="#0C1117"/>
+</svg>

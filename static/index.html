@@ -3,37 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
-<meta name="theme-color" content="#3B6D11">
+<meta name="theme-color" content="#0C1117">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CircuitLoop Field">
-<title>CircuitLoop Field — Urbeno ITAD Testing</title>
+<meta name="apple-mobile-web-app-title" content="CircuitLoop">
+<title>CircuitLoop Field — ITAD ERP</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" href="/static/favicon.svg?v=brand1" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg?v=brand1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
-:root{--navy:#0f1b2d;--navy2:#16263e;--accent:#14b8a6;--accent2:#0d9488;--blue:#3b82f6;--amber:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#8b5cf6;--bg:#f1f5f9;--card:#fff;--line:#e2e8f0;--txt:#0f172a;--mut:#64748b}
+:root{--navy:#0C1117;--navy2:#131A23;--accent:#00D4AA;--accent2:#00B894;--blue:#0099DD;--amber:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#6C5CE7;--bg:#F5F7FA;--card:#fff;--line:#DEE4ED;--txt:#1A2332;--mut:#5A6B80}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
 .app{display:flex;min-height:100vh}
 .sidebar{width:228px;background:var(--navy);color:#cbd5e1;position:fixed;top:0;bottom:0;left:0;overflow-y:auto;z-index:50}
 .logo{padding:24px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
 .logo .wm{display:flex;align-items:center}
 .logo .sub{font-size:12px;color:#94a3b8;margin-top:10px;font-weight:500}
-.brand-lockup{display:block;line-height:0}
-.brand-lockup svg{width:196px;height:auto;display:block;max-width:100%}
-.logo .brand-lockup svg{width:176px}
-.loginbox .brand-lockup{margin-bottom:14px}
-.loginbox .brand-lockup svg{width:220px}
-.brand-lockup .brand-mark{transform-box:fill-box;transform-origin:center}
-.loginbox .brand-lockup:hover .brand-mark{animation:urbeno-spin 1.2s linear}
-@keyframes urbeno-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.brand-lockup{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}
+.brand-lockup svg.brand-mark{width:48px;height:48px;display:block;flex-shrink:0}
+.brand-lockup .brand-word{min-width:0}
+.brand-lockup .brand-name{font-family:'Space Mono',ui-monospace,monospace;font-weight:700;font-size:20px;letter-spacing:-0.3px;line-height:1.1;
+ background:linear-gradient(135deg,#00B894,#0077BB,#5B4CD6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand-lockup .brand-tag{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--mut);margin-top:4px;font-weight:500}
+.logo .brand-lockup{gap:10px}
+.logo .brand-lockup svg.brand-mark{width:40px;height:40px}
+.logo .brand-name{-webkit-text-fill-color:#E8ECF1;background:none;color:#E8ECF1;font-size:16px}
+.logo .brand-tag{color:#7B8CA3;letter-spacing:1.6px;font-size:9px}
+.loginbox .brand-lockup{margin-bottom:18px}
+.loginbox .brand-lockup:hover svg.brand-mark{filter:drop-shadow(0 0 12px rgba(0,184,148,.35))}
 .navsec{padding:12px 16px 4px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;font-weight:700}
 .nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:#cbd5e1;text-decoration:none;font-size:13px;border-left:3px solid transparent;cursor:pointer}
 .nav a:hover{background:var(--navy2);color:#fff}
@@ -70,7 +74,7 @@ tbody tr:hover{background:#f8fafc}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer}
 .btn:hover{background:#f8fafc}
 .btn-p{background:var(--accent2);border-color:var(--accent2);color:#fff}
-.btn-p:hover{background:#0f766e}
+.btn-p:hover{background:#00997a}
 .btn-sm{padding:4px 10px;font-size:12px;border-radius:6px}
 .btn-danger{color:var(--red);border-color:#fecaca}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -111,7 +115,7 @@ input[type=checkbox]{width:auto}
 .subtab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
 .linklike{color:var(--blue);cursor:pointer;text-decoration:underline}
 .chartbox{position:relative;height:230px}
-.scanbox{background:linear-gradient(135deg,#0f1b2d,#16263e);border-radius:12px;padding:20px;color:#fff}
+.scanbox{background:linear-gradient(135deg,#0C1117,#182130);border-radius:12px;padding:20px;color:#fff}
 .scanbox input{font-size:17px;padding:13px 14px;font-family:ui-monospace,Menlo,monospace;letter-spacing:.5px}
 .scanbox .hint{font-size:12px;color:#94a3b8;margin-top:8px}
 .testrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
@@ -129,7 +133,7 @@ input[type=checkbox]{width:auto}
 .bclabel{border:1px dashed #94a3b8;border-radius:6px;padding:8px 6px;text-align:center;background:#fff}
 .bclabel svg{max-width:100%;height:auto}
 .bctxt{font-size:10.5px;line-height:1.5;margin-top:2px}
-.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1b2d,#16263e);padding:20px}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0C1117,#131A23 55%,#182130);padding:20px}
 .loginbox{background:#fff;border-radius:14px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
 .usercard{border:1px solid var(--line);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:11px;cursor:pointer;margin-bottom:9px}
 .usercard:hover{border-color:var(--accent);background:#f0fdfa}
@@ -148,7 +152,7 @@ input[type=checkbox]{width:auto}
 .bottombar a.active{color:var(--accent2);background:#f0fdfa}
 .fab{display:none;position:fixed;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:46;
  width:60px;height:60px;border-radius:50%;background:var(--accent2);color:#fff;border:none;
- box-shadow:0 8px 22px rgba(13,148,136,.45);font-size:24px;align-items:center;justify-content:center;cursor:pointer}
+ box-shadow:0 8px 22px rgba(0,184,148,.45);font-size:24px;align-items:center;justify-content:center;cursor:pointer}
 .fab:active{transform:scale(.94)}
 
 /* camera scanner */
@@ -156,9 +160,9 @@ input[type=checkbox]{width:auto}
 #scanregion{width:100%}
 #scanregion video{width:100%!important;display:block;border-radius:10px}
 .scanguide{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.scanguide i{display:block;width:82%;height:34%;border:2px solid rgba(20,184,166,.95);border-radius:10px;
+.scanguide i{display:block;width:82%;height:34%;border:2px solid rgba(0,212,170,.95);border-radius:10px;
  box-shadow:0 0 0 100vmax rgba(0,0,0,.35)}
-.scanline{position:absolute;left:9%;width:82%;height:2px;background:#14b8a6;box-shadow:0 0 10px #14b8a6;animation:sl 2s ease-in-out infinite}
+.scanline{position:absolute;left:9%;width:82%;height:2px;background:#00D4AA;box-shadow:0 0 10px #00D4AA;animation:sl 2s ease-in-out infinite}
 @keyframes sl{0%,100%{top:34%}50%{top:66%}}
 .scanhits{max-height:150px;overflow:auto;font-size:12.5px}
 .scanhits div{padding:6px 8px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
@@ -223,19 +227,30 @@ input[type=checkbox]{width:auto}
 <div id="loginview" class="login">
   <div class="loginbox">
     <div class="brand-lockup">
-      <svg viewBox="0 0 252 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Urbeno — Recycling Heroes">
-        <g class="brand-mark" transform="translate(2 2)">
-          <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="#3B6D11"/>
-          <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="#3B6D11" transform="rotate(120 30 30)"/>
-          <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="#3B6D11" transform="rotate(240 30 30)"/>
-        </g>
-        <text font-family="'DM Serif Display',Georgia,serif" x="76" y="40" font-size="34" fill="#3B6D11" letter-spacing="-0.3">Urbeno</text>
-        <line x1="74" y1="47" x2="244" y2="47" stroke="#C0DD97" stroke-width="1"/>
-        <text font-family="'DM Sans',Arial,sans-serif" x="74" y="58" font-size="9" fill="#5a6657" letter-spacing="1.8" font-weight="600">RECYCLING HEROES</text>
+      <svg class="brand-mark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CircuitLoop">
+        <defs>
+          <linearGradient id="clLoginGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00B894"/>
+            <stop offset="50%" stop-color="#0077BB"/>
+            <stop offset="100%" stop-color="#5B4CD6"/>
+          </linearGradient>
+        </defs>
+        <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="url(#clLoginGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M80 100L55 100" stroke="url(#clLoginGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M120 100L145 100" stroke="url(#clLoginGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+        <circle cx="68" cy="45" r="5.5" fill="#00B894"/><circle cx="132" cy="45" r="5.5" fill="#00A3AA"/>
+        <circle cx="155" cy="68" r="4.5" fill="#0077BB"/><circle cx="45" cy="132" r="4.5" fill="#5B4CD6"/>
+        <circle cx="68" cy="155" r="5.5" fill="#5040C0"/><circle cx="110" cy="155" r="5.5" fill="#4048D0"/>
+        <circle cx="100" cy="100" r="7" fill="url(#clLoginGrad)" opacity="0.9"/>
+        <circle cx="100" cy="100" r="3.5" fill="#FFFFFF"/>
       </svg>
+      <div class="brand-word">
+        <div class="brand-name">CircuitLoop</div>
+        <div class="brand-tag">ITAD ERP Platform</div>
+      </div>
     </div>
     <div style="font-size:20px;font-weight:700;margin-bottom:2px">CircuitLoop <span style="color:var(--accent2)">Field</span></div>
-    <div class="muted" style="font-size:13px;margin-bottom:18px">IT Asset Testing &amp; Project Management</div>
+    <div class="muted" style="font-size:13px;margin-bottom:18px">IT Asset Disposition &amp; testing console</div>
     <div class="muted" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sign in as</div>
     <div id="loginusers"></div>
     <div class="muted" style="font-size:11px;margin-top:14px">Demo build — select a user to continue. Super Admin sees everything; Field Engineers see only asset capture and testing for their assigned projects.</div>
@@ -247,19 +262,30 @@ input[type=checkbox]{width:auto}
   <div class="logo">
     <div class="wm">
       <div class="brand-lockup">
-        <svg viewBox="0 0 252 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Urbeno — Recycling Heroes">
-          <g class="brand-mark" transform="translate(2 2)">
-            <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white"/>
-            <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(120 30 30)"/>
-            <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(240 30 30)"/>
-          </g>
-          <text font-family="'DM Serif Display',Georgia,serif" x="76" y="40" font-size="34" fill="white" letter-spacing="-0.3">Urbeno</text>
-          <line x1="74" y1="47" x2="244" y2="47" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
-          <text font-family="'DM Sans',Arial,sans-serif" x="74" y="58" font-size="9" fill="rgba(255,255,255,0.45)" letter-spacing="1.8" font-weight="600">RECYCLING HEROES</text>
+        <svg class="brand-mark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CircuitLoop">
+          <defs>
+            <linearGradient id="clNavGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00D4AA"/>
+              <stop offset="50%" stop-color="#0099DD"/>
+              <stop offset="100%" stop-color="#6C5CE7"/>
+            </linearGradient>
+          </defs>
+          <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="url(#clNavGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M80 100L55 100" stroke="url(#clNavGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+          <path d="M120 100L145 100" stroke="url(#clNavGrad)" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+          <circle cx="68" cy="45" r="5.5" fill="#00D4AA"/><circle cx="132" cy="45" r="5.5" fill="#00BBCC"/>
+          <circle cx="155" cy="68" r="4.5" fill="#0099DD"/><circle cx="45" cy="132" r="4.5" fill="#6C5CE7"/>
+          <circle cx="68" cy="155" r="5.5" fill="#5B4CD6"/><circle cx="110" cy="155" r="5.5" fill="#4A5BE0"/>
+          <circle cx="100" cy="100" r="7" fill="url(#clNavGrad)" opacity="0.9"/>
+          <circle cx="100" cy="100" r="3.5" fill="#0C1117"/>
         </svg>
+        <div class="brand-word">
+          <div class="brand-name">CircuitLoop</div>
+          <div class="brand-tag">ITAD ERP Platform</div>
+        </div>
       </div>
     </div>
-    <div class="sub">CircuitLoop <span style="color:var(--accent)">Field</span></div>
+    <div class="sub">Field console</div>
   </div>
   <nav class="nav" id="nav"></nav>
 </aside>
@@ -286,7 +312,7 @@ input[type=checkbox]{width:auto}
    CircuitLoop Field — data model
    ============================================================ */
 const DB={
-company:{name:'Urbeno Technologies Pvt Ltd',brand:'CircuitLoop Field',gstin:'27AABCU9603R1ZM',currency:'INR'},
+company:{name:'CircuitLoop',brand:'CircuitLoop Field',gstin:'27AABCU9603R1ZM',currency:'INR'},
 users:[
  {id:'U-1',name:'Manish Kumar',email:'manish85007@gmail.com',role:'Super Admin',phone:'+91 98200 10001',active:true},
  {id:'U-2',name:'S. Iyer',email:'s.iyer@urbeno.in',role:'Super Admin',phone:'+91 98200 10002',active:true},
@@ -419,7 +445,7 @@ projects:[
   start:'2026-09-08',due:'2026-09-30',status:'Active',managerId:'U-1',team:['U-3','U-5'],
   scope:[{category:'Laptop',expected:30},{category:'Server',expected:6},{category:'Switch',expected:8},{category:'Monitor',expected:20}],
   notes:'Security escort required. Servers to be tested in situ, drives sanitized onsite.'},
- {id:'PRJ-1003',name:'Northwind Depot Q3 Refresh',clientId:'CL-3',site:'Whitefield, Bengaluru',mode:'Urbeno Facility',
+ {id:'PRJ-1003',name:'Northwind Depot Q3 Refresh',clientId:'CL-3',site:'Whitefield, Bengaluru',mode:'CircuitLoop Facility',
   start:'2026-08-10',due:'2026-08-28',status:'Completed',managerId:'U-2',team:['U-4'],
   scope:[{category:'Laptop',expected:2},{category:'Tiny PC',expected:1}],
   notes:'Closed. All assets tested and verified.'}
@@ -1066,7 +1092,7 @@ function registerAsset(serial,noSerial){
  <div class="modal-b">
    ${noSer
      ? `<div class="info">No factory serial on this unit. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> as <b>${esc(assigned)}</b> (next index on this project). Capture brand, model, cosmetic grade and the physical / no-power checklist. Blancco is not required.</div>`
-     : `<div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given an Urbeno USN.</div>`}
+     : `<div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given a CircuitLoop USN.</div>`}
    <div class="frow">
      <div><label class="f">${noSer?'Assigned serial (no factory SN)':'Serial number (scanned)'}</label><input id="ra_serial" value="${esc(assigned)}" ${noSer?'readonly':''}></div>
      <div><label class="f">Category</label><select id="ra_cat" onchange="raSpecs()">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
@@ -1267,7 +1293,7 @@ function printLabels(){
  const g=$('#bcgrid');if(!g)return;
  const w=window.open('','_blank');
  if(!w){toast('Popup blocked — allow popups to print labels');return;}
- w.document.write('<html><head><title>CircuitLoop labels</title><style>body{font-family:Segoe UI,Arial;margin:10mm}.bcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}.bclabel{border:1px dashed #999;border-radius:4px;padding:6px;text-align:center;page-break-inside:avoid}.bctxt{font-size:10px;line-height:1.5}svg{max-width:100%}</style></head><body>'+g.outerHTML+'</body></html>');
+ w.document.write('<html><head><title>CircuitLoop labels</title><style>body{font-family:Inter,Segoe UI,Arial;margin:10mm}.bcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}.bclabel{border:1px dashed #999;border-radius:4px;padding:6px;text-align:center;page-break-inside:avoid}.bctxt{font-size:10px;line-height:1.5}svg{max-width:100%}h1{font-family:Space Mono,monospace;font-size:14px;margin:0 0 8px}</style></head><body><h1>CircuitLoop</h1>'+g.outerHTML+'</body></html>');
  w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 function viewBlancco(id){
@@ -1421,7 +1447,7 @@ function editProject(id){
   <label class="f">Project name</label><input id="pj_name" value="${p?esc(p.name):''}" placeholder="Client HQ decommission — Phase 1">
   <div class="frow">
    <div><label class="f">Client</label><select id="pj_client">${DB.clients.map(c=>`<option value="${c.id}" ${p&&p.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
-   <div><label class="f">Mode</label><select id="pj_mode">${['Onsite (Client Premises)','Urbeno Facility','Hybrid'].map(m=>`<option ${p&&p.mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+   <div><label class="f">Mode</label><select id="pj_mode">${['Onsite (Client Premises)','CircuitLoop Facility','Hybrid'].map(m=>`<option ${p&&p.mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
   </div>
   <label class="f">Site address</label><input id="pj_site" value="${p?esc(p.site):''}" placeholder="Building, area, city">
   <div class="frow3">
@@ -1701,7 +1727,7 @@ function exportBlanccoCSV(){
   a.blancco?a.blancco.software:'',a.blancco?a.blancco.date:'',a.blancco?(a.blancco.verified?'Yes':'No'):'',
   a.blancco?a.blancco.drives.map(d=>d.size+' '+d.model+' — '+d.result).join(' | '):'',a.blancco?a.blancco.operator:'']);
  csvDownload('blancco_erasure_compliance_'+today()+'.csv',
-  toCSV(['Urbeno SN','Serial','Device','Project','Client','Erasure Status','Report ID','Standard','Software','Report Date','Verified','Drives','Operator'],rows));
+  toCSV(['USN','Serial','Device','Project','Client','Erasure Status','Report ID','Standard','Software','Report Date','Verified','Drives','Operator'],rows));
  toast('Erasure compliance CSV exported ('+laps.length+' laptops)');
 }
 
@@ -1812,7 +1838,7 @@ function exportReconCSV(){
  });
  assets.forEach(a=>{if(!inMf[a.serial.toLowerCase()])out.push([a.serial,'',a.category,a.usn,a.status,a.grade,userName(a.testedBy),'Unexpected — tested not on manifest']);});
  csvDownload('reconciliation_'+p.id+'_'+today()+'.csv',
-  toCSV(['Serial','Manifest Category','Tested Category','Urbeno SN','Status','Grade','Tested By','Reconciliation Result'],out));
+  toCSV(['Serial','Manifest Category','Tested Category','USN','Status','Grade','Tested By','Reconciliation Result'],out));
  toast('Reconciliation CSV exported');
 }
 
@@ -1920,7 +1946,7 @@ function assetRow(a){
   a.blancco?a.blancco.reportId:'',a.blancco?a.blancco.standard:'',
   Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; '),a.remarks,a.rejectNote||''];
 }
-const ASSET_COLS=['Urbeno SN','Serial','Client Asset Tag','Category','Brand','Model','Project ID','Project','Client',
+const ASSET_COLS=['USN','Serial','Client Asset Tag','Category','Brand','Model','Project ID','Project','Client',
  'Status','Grade','Cosmetic','Grade Rationale','Tests Recorded','Failed Parameters',
  'Tested By','Tested On','Verified By','Verified On','Blancco Status','Blancco Report','Erasure Standard',
  'Specifications','Remarks','Rejection Note'];
@@ -1943,7 +1969,7 @@ function exportTestDetailCSV(){
   });
  });
  csvDownload('test_results_detail_'+today()+'.csv',
-  toCSV(['Urbeno SN','Serial','Category','Project','Test Parameter','Critical','Result','Measured Value','Source','Tested By','Tested On'],out));
+  toCSV(['USN','Serial','Category','Project','Test Parameter','Critical','Result','Measured Value','Source','Tested By','Tested On'],out));
  toast('Parameter-level test results exported — '+out.length+' rows');
 }
 function exportGradeCSV(){
@@ -1981,8 +2007,18 @@ function projectSummary(pid){
  <div class="modal-h"><h3>📄 Project summary — ${esc(pid)}</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
   <div style="border:2px solid var(--accent2);border-radius:10px;padding:20px">
+   <div class="brand-lockup" style="justify-content:center;margin-bottom:12px">
+     <svg class="brand-mark" viewBox="0 0 200 200" width="36" height="36" fill="none" aria-hidden="true">
+       <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="#00B894" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+       <circle cx="100" cy="100" r="10" fill="#00B894"/>
+     </svg>
+     <div class="brand-word" style="text-align:left">
+       <div class="brand-name" style="font-size:18px">CircuitLoop</div>
+       <div class="brand-tag">ITAD ERP Platform</div>
+     </div>
+   </div>
    <h2 style="text-align:center;color:var(--accent2);font-size:17px;letter-spacing:.06em">PROJECT TESTING SUMMARY</h2>
-   <p style="text-align:center;font-size:12px;color:var(--mut);margin:6px 0 14px">${esc(DB.company.name)} · GSTIN ${esc(DB.company.gstin)}</p>
+   <p style="text-align:center;font-size:12px;color:var(--mut);margin:6px 0 14px">CircuitLoop Field · GSTIN ${esc(DB.company.gstin||'—')}</p>
    ${[['Project',p.id+' — '+p.name],['Client',clientName(p.clientId)],['Site / mode',p.site+' · '+p.mode],
      ['Window',p.start+' → '+p.due],['Status',p.status],['Project manager',userName(p.managerId)],
      ['Engineers',p.team.map(userName).join(', ')||'—'],
@@ -2204,6 +2240,6 @@ function toggleUser(id){
    ============================================================ */
 document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
 </script>
-<script src="/static/persist.js?v=noserial1"></script>
+<script src="/static/persist.js?v=brand1"></script>
 </body>
 </html>

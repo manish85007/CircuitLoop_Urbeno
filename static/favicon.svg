@@ -1,10 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none" role="img" aria-label="Urbeno favicon">
-  <!-- Rounded square background -->
-  <rect width="60" height="60" rx="12" fill="#3B6D11"/>
-  <!-- White recycling arrows, slightly smaller (scale 0.82, centred) -->
-  <g transform="translate(5.4 5.4) scale(0.82)">
-    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white"/>
-    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(120 30 30)"/>
-    <path d="M35.7 8.8 A22 22 0 0 1 50.7 37.5 L44.7 40.3 L43.2 34.8 A14 14 0 0 0 33.6 16.5 Z" fill="white" transform="rotate(240 30 30)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="CircuitLoop">
+  <defs>
+    <linearGradient id="clFavGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D4AA"/>
+      <stop offset="50%" stop-color="#0099DD"/>
+      <stop offset="100%" stop-color="#6C5CE7"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0C1117"/>
+  <g transform="translate(8 8) scale(0.24)">
+    <path d="M68 45L132 45Q155 45 155 68L155 90Q155 100 145 100L120 100Q110 100 110 110L110 132Q110 155 88 155L68 155Q45 155 45 132L45 110Q45 100 55 100L80 100Q90 100 90 90L90 68Q90 45 68 45Z" stroke="url(#clFavGrad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="68" cy="45" r="10" fill="#00D4AA"/>
+    <circle cx="132" cy="45" r="10" fill="#00BBCC"/>
+    <circle cx="68" cy="155" r="10" fill="#5B4CD6"/>
+    <circle cx="110" cy="155" r="10" fill="#4A5BE0"/>
+    <circle cx="100" cy="100" r="14" fill="url(#clFavGrad)"/>
+    <circle cx="100" cy="100" r="7" fill="#0C1117"/>
   </g>
 </svg>
