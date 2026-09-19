@@ -134,15 +134,35 @@ def merge_state(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
     return out
 
 
-def load_state() -> dict[str, Any] | None:
+def snapshot_state_bytes() -> bytes | None:
+    """Read the live register under the write lock. Does not modify production data."""
     ensure_dirs()
-    if not STATE_PATH.exists():
-        return None
     with _lock:
-        raw = STATE_PATH.read_text(encoding="utf-8")
+        if not STATE_PATH.exists():
+            return None
+        raw = STATE_PATH.read_bytes()
     if not raw.strip():
         return None
-    return json.loads(raw)
+    return raw
+
+
+def replace_state_bytes(raw: bytes) -> None:
+    """Atomically replace the live register. Used only by restore, never by backup."""
+    if not raw.strip():
+        raise ValueError("Backup is empty; live register was not changed.")
+    json.loads(raw.decode("utf-8"))
+    ensure_dirs()
+    with _lock:
+        tmp = STATE_PATH.with_suffix(".json.tmp")
+        tmp.write_bytes(raw)
+        tmp.replace(STATE_PATH)
+
+
+def load_state() -> dict[str, Any] | None:
+    raw = snapshot_state_bytes()
+    if raw is None:
+        return None
+    return json.loads(raw.decode("utf-8"))
 
 
 def save_state(state: dict[str, Any]) -> dict[str, Any]:

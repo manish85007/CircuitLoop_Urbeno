@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -11,8 +12,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.auth import clear_session, issue_session, read_session
+from app.backup import backup_loop, backup_status
 from app.blancco import lookup as blancco_lookup
-from app.config import APP_NAME, BRAND, CORS_ORIGINS, DATA_DIR, ROOT, STATE_PATH, ensure_dirs
+from app.config import (
+    APP_NAME,
+    BRAND,
+    CORS_ORIGINS,
+    DATA_DIR,
+    ROOT,
+    STATE_PATH,
+    backup_enabled,
+    ensure_dirs,
+)
 from app.store import StaleState, load_state, save_state
 
 STATIC_DIR = ROOT / "static"
@@ -29,7 +40,16 @@ def api_json(payload: dict[str, Any], status: int = 200) -> JSONResponse:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     ensure_dirs()
-    yield
+    task = None
+    if backup_enabled():
+        task = asyncio.create_task(backup_loop(), name="circuitloop-backup")
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(title=f"{APP_NAME} field API", version="0.2.0", lifespan=lifespan)
@@ -73,6 +93,7 @@ def health() -> JSONResponse:
                 "statePath": str(STATE_PATH),
                 "hasState": STATE_PATH.exists() and STATE_PATH.stat().st_size > 0,
             },
+            "backup": backup_status(),
         }
     )
 

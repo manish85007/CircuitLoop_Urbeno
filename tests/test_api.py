@@ -1,8 +1,3 @@
-import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-
 SEED = {
     "company": {"name": "Urbeno Technologies Pvt Ltd", "brand": "CircuitLoop Field", "gstin": "27AABCU9603R1ZM", "currency": "INR"},
     "users": [
@@ -40,12 +35,6 @@ SEED = {
     "specFields": {},
     "seq": {"asset": 1, "usn": 50001, "project": 1004, "client": 4, "user": 6, "blancco": 9001},
 }
-
-
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
 
 
 def test_health(client):
