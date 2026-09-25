@@ -95,7 +95,8 @@ Do **not** delete `/data/circuitloop-state.json` first. Restore replaces it in p
 - `GET`/`PUT /api/state` persists the UI `DB`
 - Daily backup of `/data` on the same volume (keep latest only); restore via `python -m app.backup restore`
 - Click-to-sign-in session cookie
-- Blancco live lookup via the server (demo simulation if no key)
+- Blancco live lookup via the server (demo simulation if no key). **Optional:** submit, verify, and complete never require a Blancco lookup, report, or pass. Super Admins opt a client in under Masters → Clients to enable auto-pull.
+- Device identity is editable on existing assets (make/model, serial, USN, category, project, tag, specs) so testers can fix data-entry errors.
 
 ## Not in this slice
 

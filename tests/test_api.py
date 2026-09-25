@@ -71,6 +71,22 @@ def test_index_is_original_field_ui(client):
     assert "physical / no-power" in res.text
 
 
+def test_blancco_optional_and_editable_device_fields(client):
+    html = client.get("/").text
+    assert "Laptops cannot be submitted without one" not in html
+    assert "Laptops need a successful Blancco erasure report before submission" not in html
+    assert "laptops require a successful Blancco erasure report" not in html
+    assert "function blanccoRequired(a){return false;}" in html
+    assert "blanccoOptIn" in html
+    assert "editAssetDetails" in html
+    assert "saveAssetDetails" in html
+    assert "patchMakeModel" in html
+    assert "Edit all device details" in html
+    assert "Use Blancco erasure reports for this client" in html
+    assert "persist.js?v=field2" in html
+    assert "never requires a Blancco lookup" in html or "never require a Blancco" in html
+
+
 def test_jobs_api_removed(client):
     assert client.get("/api/jobs").status_code == 404
 

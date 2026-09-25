@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="icon" href="/static/favicon.svg?v=brand1" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/static/favicon.svg?v=brand1">
+<link rel="icon" href="/static/favicon.svg?v=field2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg?v=field2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
@@ -321,9 +321,9 @@ users:[
  {id:'U-5',name:'P. Shetty',email:'p.shetty@urbeno.in',role:'Field Engineer',phone:'+91 98200 10005',active:true}
 ],
 clients:[
- {id:'CL-1',name:'Meridian Health Systems',gstin:'27AAACM4521H1Z2',pan:'AAACM4521H',contact:'Sarah Okafor',phone:'+91 98220 40147',email:'s.okafor@meridianhealth.in',address:'Meridian House, Baner Road, Pune 411045'},
- {id:'CL-2',name:'Vantage Financial Group',gstin:'27AAACV8811F1Z9',pan:'AAACV8811F',contact:'Derek Lin',phone:'+91 99300 20198',email:'dlin@vantagefg.in',address:'Vantage Towers, BKC, Mumbai 400051'},
- {id:'CL-3',name:'Northwind Logistics',gstin:'29AAACN3344K1Z4',pan:'AAACN3344K',contact:'Amanda Reyes',phone:'+91 98450 30122',email:'areyes@northwindlog.in',address:'Whitefield, Bengaluru 560066'}
+ {id:'CL-1',name:'Meridian Health Systems',gstin:'27AAACM4521H1Z2',pan:'AAACM4521H',contact:'Sarah Okafor',phone:'+91 98220 40147',email:'s.okafor@meridianhealth.in',address:'Meridian House, Baner Road, Pune 411045',blanccoOptIn:true},
+ {id:'CL-2',name:'Vantage Financial Group',gstin:'27AAACV8811F1Z9',pan:'AAACV8811F',contact:'Derek Lin',phone:'+91 99300 20198',email:'dlin@vantagefg.in',address:'Vantage Towers, BKC, Mumbai 400051',blanccoOptIn:false},
+ {id:'CL-3',name:'Northwind Logistics',gstin:'29AAACN3344K1Z4',pan:'AAACN3344K',contact:'Amanda Reyes',phone:'+91 98450 30122',email:'areyes@northwindlog.in',address:'Whitefield, Bengaluru 560066',blanccoOptIn:false}
 ],
 categories:['Laptop','Desktop','Monitor','Thin Client','Tiny PC','Server','Switch','All-in-One','Tablet','Printer'],
 /* Blancco applies to laptops only, per policy */
@@ -440,7 +440,7 @@ projects:[
  {id:'PRJ-1001',name:'Meridian Clinic Refresh — Phase 1',clientId:'CL-1',site:'Meridian Clinic, Oak Park, Pune',mode:'Onsite (Client Premises)',
   start:'2026-09-01',due:'2026-09-20',status:'Active',managerId:'U-2',team:['U-3','U-4'],
   scope:[{category:'Laptop',expected:40},{category:'Desktop',expected:15},{category:'Monitor',expected:25},{category:'Thin Client',expected:10}],
-  notes:'HIPAA-sensitive. Every data-bearing device needs verified erasure before dispatch. Blancco reports mandatory for laptops.'},
+  notes:'HIPAA-sensitive. Blancco erasure reports are optional — this client has opted in, so CircuitLoop can auto-pull laptop reports. Submit and complete still work without a Blancco lookup, report, or pass.'},
  {id:'PRJ-1002',name:'Vantage HQ Decommission',clientId:'CL-2',site:'Vantage Towers, BKC, Mumbai',mode:'Onsite (Client Premises)',
   start:'2026-09-08',due:'2026-09-30',status:'Active',managerId:'U-1',team:['U-3','U-5'],
   scope:[{category:'Laptop',expected:30},{category:'Server',expected:6},{category:'Switch',expected:8},{category:'Monitor',expected:20}],
@@ -532,7 +532,14 @@ function testProgress(a){
  return {done,total:params.length,pct:params.length?Math.round(done/params.length*100):0};
 }
 function isTestComplete(a){const p=testProgress(a);return p.done===p.total;}
-function blanccoRequired(a){return isBlanccoCat(a.category)&&!isNoSerialValue(a.serial);}
+function clientOfAsset(a){
+ const p=projectById(a&&a.projectId);
+ return p?DB.clients.find(x=>x.id===p.clientId):null;
+}
+function blanccoEligible(a){return !!(a&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial));}
+function blanccoOptedIn(a){const c=clientOfAsset(a);return !!(c&&c.blanccoOptIn);}
+/* Never block submit / verify / complete on Blancco. Opt-in only enables auto-pull. */
+function blanccoRequired(a){return false;}
 function isBareNoSerial(serial){
  const s=String(serial||'').trim().replace(/\s+/g,'');
  return !s || /^noserial$/i.test(s);
@@ -847,6 +854,7 @@ render(){
    <td>${isBlanccoCat(a.category)?(a.blancco?badge(a.blancco.status):'<span class="muted" style="font-size:11px">not pulled</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
    <td class="flex">
      <button class="btn btn-sm btn-p" onclick="openTest('${a.id}')">${pr.done?'Continue':'Start'} Test</button>
+     <button class="btn btn-sm" onclick="editAssetDetails('${a.id}','openTest')">Edit</button>
      <button class="btn btn-sm" onclick="assetLabel('${a.id}')">Label</button>
    </td></tr>`;
  }).join('');
@@ -1069,7 +1077,7 @@ function batchCapture(serial){
  DB.assets.push(a);
  SCAN_HITS.unshift({serial:assigned,note:a.usn+' · '+cat,ok:true});
  paintHits();
- if(!noSer&&isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlanccoQuiet(a.id);
+ if(blanccoEligible(a)&&blanccoOptedIn(a)&&(DB.blanccoConfig||{}).autoFetch)pullBlanccoQuiet(a.id);
 }
 function pullBlanccoQuiet(id){try{pullBlancco(id,true);}catch(e){}}
 function paintHits(){
@@ -1138,7 +1146,7 @@ function saveRegister(){
  closeModal();rerender();
  toast('Registered '+serial+' as '+a.usn);
  openTest(a.id);
- if(!noSer&&isBlanccoCat(cat)&&DB.blanccoConfig.autoFetch)pullBlancco(a.id,true);
+ if(blanccoEligible(a)&&blanccoOptedIn(a)&&(DB.blanccoConfig||{}).autoFetch)pullBlancco(a.id,true);
 }
 
 /* ---------- Test sheet ---------- */
@@ -1149,19 +1157,18 @@ function openTest(id){
  TESTING_ID=id;
  if(a.status==='Registered'){a.status='In Testing';a.history.push({ts:stamp(),by:ME.name,ev:'Testing started'});}
  const params=paramsFor(a.category);
- const locked=a.status==='Verified'&&ME.role!=='Super Admin';
  const rows=params.map(p=>{
   const v=a.tests[p.key]||'';
-  const isB=p.blancco&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial);
+  const isB=p.blancco&&blanccoEligible(a);
   return `<div class="testrow">
    <div><div class="nm">${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</div>
-    ${isB?`<div class="muted" style="font-size:11px">Auto-filled from the Blancco report — ${a.blancco?'report '+esc(a.blancco.reportId)+' ('+esc(a.blancco.status)+')':'no report linked yet'}</div>`:''}
+    ${isB?`<div class="muted" style="font-size:11px">Blancco is optional. ${a.blancco?'Linked report '+esc(a.blancco.reportId)+' ('+esc(a.blancco.status)+') — you can still override Pass / Fail / N/A.':'No report linked — record sanitization by hand, or pull a report if this client uses Blancco.'}</div>`:''}
     ${p.measure?`<input style="max-width:180px;margin-top:5px;padding:5px 8px;font-size:12px" placeholder="${esc(p.measure)}" value="${esc((a.measures||{})[p.key]||'')}" oninput="setMeasure('${p.key}',this.value)">`:''}
    </div>
    <div class="seg">
-    <button class="${v==='Pass'?'on-pass':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','Pass')">Pass</button>
-    <button class="${v==='Fail'?'on-fail':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','Fail')">Fail</button>
-    <button class="${v==='N/A'?'on-na':''}" ${locked||isB?'disabled':''} onclick="setTest('${p.key}','N/A')">N/A</button>
+    <button class="${v==='Pass'?'on-pass':''}" onclick="setTest('${p.key}','Pass')">Pass</button>
+    <button class="${v==='Fail'?'on-fail':''}" onclick="setTest('${p.key}','Fail')">Fail</button>
+    <button class="${v==='N/A'?'on-na':''}" onclick="setTest('${p.key}','N/A')">N/A</button>
    </div></div>`;
  }).join('');
  const g=gradeAsset(a);
@@ -1170,16 +1177,20 @@ function openTest(id){
  openModal(`
  <div class="modal-h"><h3>⌁ ${esc(a.serial)} — ${esc(a.category)} ${badge(a.status)}</h3><button class="x" onclick="closeModal();rerender()">×</button></div>
  <div class="modal-b">
-   <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''}</div>
+   <div class="frow" style="margin-bottom:10px">
+     <div><label class="f">Make</label><input value="${esc(a.brand==='—'?'':a.brand)}" placeholder="Dell / HP / Lenovo" onchange="patchMakeModel('${a.id}','brand',this.value)"></div>
+     <div><label class="f">Model</label><input value="${esc(a.model==='—'?'':a.model)}" placeholder="Latitude 5540" onchange="patchMakeModel('${a.id}','model',this.value)"></div>
+   </div>
+   <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''} · <span class="linklike" onclick="editAssetDetails('${a.id}','openTest')">Edit all device details</span></div>
    ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by Super Admin:</b> ${esc(a.rejectNote||'')}</div>`:''}
    ${isNoSerialValue(a.serial)
      ? `<div class="info">No factory serial — physical / no-power check (<b>${esc(a.serial)}</b>). Record cosmetic grade and every parameter. Mark <b>Powers on</b> Fail if the unit has no power. Blancco is not required to submit.</div>`
-     : isBlanccoCat(a.category)?(a.blancco
-     ? `<div class="${a.blancco.status==='Erased'?'okbox':'errbox'}">🛡 Blancco <b>${esc(a.blancco.reportId)}</b> — ${esc(a.blancco.status)} · ${esc(a.blancco.standard)} · ${esc(a.blancco.date)}
+     : blanccoEligible(a)?(a.blancco
+     ? `<div class="${a.blancco.status==='Erased'?'okbox':'errbox'}">🛡 Blancco <b>${esc(a.blancco.reportId)}</b> — ${esc(a.blancco.status)} · ${esc(a.blancco.standard)} · ${esc(a.blancco.date)} (optional)
          <button class="btn btn-sm" style="margin-left:8px" onclick="viewBlancco('${a.id}')">View report</button>
          <button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Re-pull</button></div>`
-     : `<div class="warn">🛡 No Blancco erasure report linked. Laptops cannot be submitted without one.
-         <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="pullBlancco('${a.id}')">Pull from Blancco API</button></div>`)
+     : `<div class="info">🛡 Blancco is optional${blanccoOptedIn(a)?' — this client has opted in, so you can pull a report':''}. Submit without a lookup, report, or pass.
+         <button class="btn btn-sm ${blanccoOptedIn(a)?'btn-p':''}" style="margin-left:8px" onclick="pullBlancco('${a.id}')">Pull from Blancco API</button></div>`)
     : `<div class="info">🛡 Blancco is configured for Laptops only — sanitization for ${esc(a.category)} is recorded manually in the checklist below.</div>`}
    <div class="flex" style="margin-bottom:10px">
      <div style="flex:1;min-width:160px"><div class="progressbar"><div style="width:${pr.pct}%"></div></div>
@@ -1211,6 +1222,7 @@ function openTest(id){
  </div>
  <div class="modal-f">
    <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
+   <button class="btn" onclick="editAssetDetails('${a.id}','openTest')">Edit details</button>
    <button class="btn" onclick="closeModal();rerender()">Close</button>
    ${a.status==='Tested'||a.status==='Verified'?'':`<button class="btn btn-p" onclick="submitTest('${a.id}')">Submit for verification</button>`}
  </div>`,true);
@@ -1223,13 +1235,9 @@ function setTest(key,val){
 }
 function markAllPass(id){
  const a=DB.assets.find(x=>x.id===id);
- const bp=paramsFor(a.category).find(p=>p.blancco);
- paramsFor(a.category).forEach(p=>{
-  if(p.blancco&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial))return;   /* Blancco parameter is API-owned */
-  a.tests[p.key]='Pass';
- });
+ paramsFor(a.category).forEach(p=>{a.tests[p.key]='Pass';});
  recomputeGrade(a);openTest(a.id);
- toast('All parameters marked Pass'+(bp&&isBlanccoCat(a.category)?' — sanitization still comes from Blancco':'')+'. Change any that failed.');
+ toast('All parameters marked Pass. Change any that failed.');
 }
 function setMeasure(key,val){
  const a=DB.assets.find(x=>x.id===TESTING_ID);
@@ -1263,12 +1271,112 @@ function submitTest(id){
  const a=DB.assets.find(x=>x.id===id);
  const pr=testProgress(a);
  if(pr.done<pr.total){toast('Record all '+pr.total+' test parameters before submitting ('+pr.done+' done)');return;}
- if(blanccoRequired(a)&&!blanccoOK(a)){toast('Laptops need a successful Blancco erasure report before submission — pull it from the API first');return;}
  a.status='Tested';a.testedBy=ME.id;a.testedAt=today();
  recomputeGrade(a);
- a.history.push({ts:stamp(),by:ME.name,ev:'Submitted for verification — grade '+a.grade});
+ a.history.push({ts:stamp(),by:ME.name,ev:'Submitted for verification — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:' · no Blancco report')});
  closeModal();rerender();
  toast(a.serial+' submitted — grade '+a.grade+'. Awaiting Super Admin verification.');
+}
+function patchMakeModel(id,key,val){
+ const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ const next=String(val||'').trim()||'—';
+ if(a[key]===next)return;
+ const label=key==='brand'?'make':'model';
+ a[key]=next;
+ a.history=a.history||[];
+ a.history.push({ts:stamp(),by:ME.name,ev:'Updated '+label+' to '+next});
+ rerender();
+ toast((key==='brand'?'Make':'Model')+' saved');
+}
+function serialTakenByOther(serial,projectId,exceptId){
+ const s=String(serial||'').trim().toLowerCase();
+ if(!s)return false;
+ if(parseNoSerialIndex(serial)!=null){
+  return (DB.assets||[]).some(a=>a.id!==exceptId&&a.projectId===projectId&&String(a.serial||'').toLowerCase()===s);
+ }
+ return (DB.assets||[]).some(a=>a.id!==exceptId&&String(a.serial||'').toLowerCase()===s);
+}
+function usnTakenByOther(usn,exceptId){
+ const s=String(usn||'').trim().toLowerCase();
+ if(!s)return false;
+ return (DB.assets||[]).some(a=>a.id!==exceptId&&String(a.usn||'').toLowerCase()===s);
+}
+function editAssetDetails(id,back){
+ const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ window.EDITING_ID=id;
+ const backFn=back==='assetDetail'?'assetDetail':'openTest';
+ const projs=(ME&&ME.role==='Super Admin'?DB.projects:myProjects()).slice();
+ if(a.projectId&&!projs.some(p=>p.id===a.projectId)){
+  const cur=projectById(a.projectId);if(cur)projs.unshift(cur);
+ }
+ openModal(`<div class="modal-h"><h3>Edit device — ${esc(a.serial)}</h3><button class="x" onclick="${backFn}('${id}')">×</button></div>
+ <div class="modal-b">
+  <div class="info">Fix data-entry errors on this existing device. Make, model, serial, USN, category, project, tag, cosmetic grade, remarks and specifications are all editable. Saving does not require Blancco.</div>
+  <div class="frow">
+   <div><label class="f">Serial number</label><input id="ed_serial" value="${esc(a.serial)}"></div>
+   <div><label class="f">USN</label><input id="ed_usn" value="${esc(a.usn)}"></div>
+  </div>
+  <div class="frow">
+   <div><label class="f">Make</label><input id="ed_brand" value="${esc(a.brand==='—'?'':a.brand)}" placeholder="Dell / HP / Lenovo"></div>
+   <div><label class="f">Model</label><input id="ed_model" value="${esc(a.model==='—'?'':a.model)}" placeholder="Latitude 5540"></div>
+  </div>
+  <div class="frow">
+   <div><label class="f">Category</label><select id="ed_cat" onchange="refreshEditSpecs()">${DB.categories.map(c=>`<option ${c===a.category?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+   <div><label class="f">Project</label><select id="ed_proj">${projs.map(p=>`<option value="${esc(p.id)}" ${p.id===a.projectId?'selected':''}>${esc(p.id)} — ${esc(p.name)}</option>`).join('')}</select></div>
+  </div>
+  <div class="frow">
+   <div><label class="f">Client asset tag</label><input id="ed_tag" value="${esc(a.assetTag||'')}"></div>
+   <div><label class="f">Cosmetic grade</label><select id="ed_cos">${['A','B','C','D'].map(c=>`<option value="${c}" ${a.cosmetic===c?'selected':''}>${c}</option>`).join('')}</select></div>
+  </div>
+  <label class="f">Engineer remarks</label><textarea id="ed_rem" rows="3" maxlength="500">${esc(a.remarks||'')}</textarea>
+  <div id="ed_specs"></div>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="${backFn}('${id}')">Back</button>
+  <button class="btn btn-p" onclick="saveAssetDetails('${id}','${backFn}')">Save details</button></div>`);
+ refreshEditSpecs();
+}
+function refreshEditSpecs(){
+ const el=$('#ed_specs');if(!el)return;
+ const a=DB.assets.find(x=>x.id===window.EDITING_ID);
+ const cat=($('#ed_cat')&&$('#ed_cat').value)||(a&&a.category);
+ const current=(a&&a.specs)||{};
+ el.innerHTML='<label class="f" style="margin-top:12px">Specifications — '+esc(cat)+'</label><div class="frow3">'+
+  specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="eds_${i}" data-f="${esc(f)}" value="${esc(current[f]||'')}"></div>`).join('')+'</div>';
+}
+function saveAssetDetails(id,backFn){
+ const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ const serial=String($('#ed_serial').value||'').trim();
+ const usn=String($('#ed_usn').value||'').trim();
+ if(!serial){toast('Serial number is required');return;}
+ if(!usn){toast('USN is required');return;}
+ const projectId=$('#ed_proj').value||a.projectId;
+ if(serialTakenByOther(serial,projectId,id)){toast('Serial '+serial+' already exists in the register');return;}
+ if(usnTakenByOther(usn,id)){toast('USN '+usn+' already exists in the register');return;}
+ const cat=$('#ed_cat').value;
+ const brand=String($('#ed_brand').value||'').trim()||'—';
+ const model=String($('#ed_model').value||'').trim()||'—';
+ const specs={};
+ $$('#ed_specs input[data-f]').forEach(el=>{if(el.value)specs[el.dataset.f]=el.value;});
+ const changes=[];
+ if(a.serial!==serial)changes.push('serial '+a.serial+' → '+serial);
+ if(a.usn!==usn)changes.push('USN '+a.usn+' → '+usn);
+ if(a.brand!==brand)changes.push('make '+a.brand+' → '+brand);
+ if(a.model!==model)changes.push('model '+a.model+' → '+model);
+ if(a.category!==cat)changes.push('category '+a.category+' → '+cat);
+ if(a.projectId!==projectId)changes.push('project '+a.projectId+' → '+projectId);
+ a.serial=serial;a.usn=usn;a.brand=brand;a.model=model;a.category=cat;a.projectId=projectId;
+ a.assetTag=String($('#ed_tag').value||'').trim();
+ a.cosmetic=$('#ed_cos').value||a.cosmetic;
+ a.remarks=String($('#ed_rem').value||'').slice(0,500);
+ a.specs=specs;
+ if(changes.length){
+  a.history=a.history||[];
+  a.history.push({ts:stamp(),by:ME.name,ev:'Device details edited: '+changes.join('; ')});
+ }
+ recomputeGrade(a);
+ rerender();
+ toast('Device details saved'+(changes.length?' — '+changes.join(', '):''));
+ if(backFn==='assetDetail')assetDetail(id);else openTest(id);
 }
 function assetLabel(id){
  const a=DB.assets.find(x=>x.id===id);
@@ -1547,6 +1655,7 @@ render(){
    <td>${isBlanccoCat(a.category)?(a.blancco?'<span class="linklike" onclick="viewBlancco(\''+a.id+'\')">'+esc(a.blancco.reportId)+'</span>':'<span class="muted" style="font-size:11px">none</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
    <td class="flex">
      <button class="btn btn-sm" onclick="assetDetail('${a.id}')">View</button>
+     <button class="btn btn-sm" onclick="editAssetDetails('${a.id}','assetDetail')">Edit</button>
      ${a.status==='Tested'?`<button class="btn btn-sm btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>
        <button class="btn btn-sm btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>`:''}
    </td></tr>`).join('');
@@ -1587,7 +1696,7 @@ function assetDetail(id){
  openModal(`
  <div class="modal-h"><h3>${esc(a.serial)} — ${esc(a.category)} ${badge(a.status)} ${a.grade?badge(a.grade):''}</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
-  <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))} · ${esc(clientName((projectById(a.projectId)||{}).clientId))}</div>
+  <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(a.brand)} ${esc(a.model)} · ${esc(projectName(a.projectId))} · ${esc(clientName((projectById(a.projectId)||{}).clientId))} · <span class="linklike" onclick="editAssetDetails('${a.id}','assetDetail')">Edit all fields</span></div>
   ${a.status==='Rejected'?`<div class="errbox">Rejected: ${esc(a.rejectNote||'')}</div>`:''}
   <div class="grid2">
    <div>
@@ -1600,10 +1709,10 @@ function assetDetail(id){
     <div style="font-size:12px">${Object.entries(a.specs||{}).map(([k,v])=>'<span class="tag">'+esc(k)+': '+esc(v)+'</span>').join('')||'<span class="muted">None captured</span>'}</div>
     <label class="f">Cosmetic grade</label><div>${badge(a.cosmetic||'—')}</div>
     <label class="f">Engineer remarks</label><div style="font-size:13px">${esc(a.remarks||'—')}</div>
-    ${isBlanccoCat(a.category)?`<label class="f">Blancco erasure</label>
+    ${blanccoEligible(a)?`<label class="f">Blancco erasure (optional)</label>
       ${a.blancco?`<div style="font-size:13px">${badge(a.blancco.status)} ${esc(a.blancco.reportId)} · ${esc(a.blancco.standard)}
         <button class="btn btn-sm" onclick="viewBlancco('${a.id}')">Open report</button></div>`
-      :`<div class="warn" style="margin:4px 0 0">No report linked <button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Pull from API</button></div>`}`
+      :`<div class="info" style="margin:4px 0 0">No report linked — submit and verify still work. ${blanccoOptedIn(a)?'This client has opted in. ':''}<button class="btn btn-sm" onclick="pullBlancco('${a.id}')">Pull from API</button></div>`}`
      :'<label class="f">Data sanitization</label><div class="muted" style="font-size:12px">Recorded manually — Blancco is laptop-only.</div>'}
     <label class="f">Audit trail</label>
     <div style="font-size:12px">${(a.history||[]).map(h=>`<div style="padding:3px 0;border-bottom:1px solid var(--line)"><span class="muted">${esc(h.ts)} · ${esc(h.by)}</span><br>${esc(h.ev)}</div>`).join('')}</div>
@@ -1612,16 +1721,16 @@ function assetDetail(id){
  </div>
  <div class="modal-f">
   <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
+  <button class="btn" onclick="editAssetDetails('${a.id}','assetDetail')">Edit details</button>
   ${a.status==='Tested'?`<button class="btn btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>
     <button class="btn btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>`:''}
   <button class="btn" onclick="closeModal()">Close</button></div>`,true);
 }
 function verifyAsset(id){
  const a=DB.assets.find(x=>x.id===id);
- if(blanccoRequired(a)&&!blanccoOK(a)){toast('Cannot verify '+a.serial+': laptops require a successful Blancco erasure report');return;}
  if(!isTestComplete(a)){toast('Cannot verify '+a.serial+': test parameters incomplete');return;}
  a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();a.rejectNote='';
- a.history.push({ts:stamp(),by:ME.name,ev:'Verified by Super Admin — grade '+a.grade});
+ a.history.push({ts:stamp(),by:ME.name,ev:'Verified by Super Admin — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:'')});
  closeModal();rerender();toast(a.serial+' verified (grade '+a.grade+')');
 }
 function rejectAsset(id){
@@ -1645,13 +1754,12 @@ function bulkVerify(){
  DB.assets.filter(a=>a.status==='Tested').forEach(a=>{
   if(REG.project!=='all'&&a.projectId!==REG.project)return;
   if(REG.category!=='all'&&a.category!==REG.category)return;
-  if(blanccoRequired(a)&&!blanccoOK(a)){skip++;return;}
   if(!isTestComplete(a)){skip++;return;}
   a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();
   a.history.push({ts:stamp(),by:ME.name,ev:'Verified (bulk) — grade '+a.grade});n++;
  });
  rerender();
- toast(n?n+' asset(s) verified'+(skip?', '+skip+' skipped (incomplete tests or missing Blancco)':''):'Nothing eligible to verify'+(skip?' — '+skip+' blocked':''));
+ toast(n?n+' asset(s) verified'+(skip?', '+skip+' skipped (incomplete tests)':''):'Nothing eligible to verify'+(skip?' — '+skip+' blocked':''));
 }
 
 /* ============================================================
@@ -1684,7 +1792,7 @@ render(){
   <div class="kpi amber"><div class="lbl">No report yet</div><div class="val">${missing.length}</div></div>
   <div class="kpi blue"><div class="lbl">Coverage</div><div class="val">${laps.length?Math.round(linked.length/laps.length*100):0}%</div></div>
  </div>
- <div class="info">🛡 <b>Scope:</b> Blancco covers the data-sanitization test parameter for <b>Laptops only</b>. Every other category records sanitization manually in its own checklist — the app blocks Blancco pulls for them. Laptops cannot be submitted or verified without a successful report.</div>
+ <div class="info">🛡 <b>Optional:</b> Blancco can attach erasure reports to <b>Laptops</b> when a client has opted in (Masters → Clients). It never blocks submit, verify, or project complete — no lookup, report, or pass is required. Other categories record sanitization by hand. Auto-pull on scan runs only for opted-in clients when Auto-pull is on.</div>
  <div class="card"><div class="card-h"><h3>API configuration</h3>
    <button class="btn btn-sm" onclick="saveBlanccoCfg()">Save</button></div>
   <div class="card-b">
@@ -1694,7 +1802,7 @@ render(){
    </div>
    <div class="frow">
     <div><label class="f">API key / token</label><input id="bc_key" type="password" value="${esc(cfg.apiKey)}" placeholder="Paste the Management Console API token"></div>
-    <div><label class="f">Auto-pull on registration</label><select id="bc_auto"><option value="1" ${cfg.autoFetch?'selected':''}>Yes — fetch as soon as a laptop is scanned</option><option value="0" ${cfg.autoFetch?'':'selected'}>No — pull manually</option></select></div>
+    <div><label class="f">Auto-pull on registration</label><select id="bc_auto"><option value="1" ${cfg.autoFetch?'selected':''}>Yes — for clients that opt in, fetch when a laptop is scanned</option><option value="0" ${cfg.autoFetch?'':'selected'}>No — pull manually</option></select></div>
    </div>
    <div class="muted" style="font-size:12px;margin-top:10px">Last sync ${esc(cfg.lastSync)} · reports are stored against each device and included in project reporting. In Demo mode the app synthesises a valid report so the flow can be exercised without credentials; append <span class="tag">FAILSEED</span> to a serial to simulate a failed erasure.</div>
    <div class="flex" style="margin-top:12px">
@@ -1866,7 +1974,7 @@ render(){
   </tr>`;
  }).join('');
  const laps=assets.filter(a=>isBlanccoCat(a.category));
- const lapsMissing=laps.filter(a=>!a.blancco).length;
+ const lapsMissing=laps.filter(a=>blanccoOptedIn(a)&&!a.blancco).length;
  const pendVerify=assets.filter(a=>a.status==='Tested').length;
  return `
  <div class="kpis">
@@ -1890,7 +1998,7 @@ render(){
   <div class="card"><div class="card-h"><h3>Attention needed</h3></div><div class="card-b" style="font-size:13px">
    ${pendVerify?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🟣 <b>${pendVerify}</b> asset(s) awaiting verification ${admin?'— <span class="linklike" onclick="show(\'register\')">open register</span>':'(with the Super Admin)'}</div>`:''}
    ${assets.filter(a=>a.status==='Rejected').length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🔴 <b>${assets.filter(a=>a.status==='Rejected').length}</b> rejected asset(s) need rework — <span class="linklike" onclick="show('testing')">open testing queue</span></div>`:''}
-   ${lapsMissing?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🛡 <b>${lapsMissing}</b> laptop(s) without a Blancco erasure report ${admin?'— <span class="linklike" onclick="show(\'blancco\')">pull now</span>':''}</div>`:''}
+   ${lapsMissing?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🛡 <b>${lapsMissing}</b> opted-in laptop(s) without a Blancco report ${admin?'— <span class="linklike" onclick="show(\'blancco\')">pull now</span>':''} (optional, does not block submit)</div>`:''}
    ${open.filter(p=>p.due<today()).length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">⏰ <b>${open.filter(p=>p.due<today()).length}</b> project(s) past due date</div>`:''}
    ${open.filter(p=>projectStats(p).canClose).length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">✅ <b>${open.filter(p=>projectStats(p).canClose).length}</b> project(s) ready to be marked completed</div>`:''}
    ${!pendVerify&&!lapsMissing&&!assets.filter(a=>a.status==='Rejected').length?'<div class="muted">Nothing outstanding. 🎉</div>':''}
@@ -2073,7 +2181,7 @@ function mdBody(){
     <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${DB.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
    <div class="card-b">
     <div class="muted" style="font-size:12px;margin-bottom:8px">A <b>critical</b> failure forces the asset to grade D regardless of cosmetics. Engineers must record every parameter before submitting.
-     ${isBlanccoCat(cat)?'This category is Blancco-linked: the sanitization parameter is filled automatically from the erasure report and cannot be set by hand.':''}</div>
+     ${isBlanccoCat(cat)?'This category can link a Blancco report when the client opts in. Sanitization can always be set by hand — Blancco is never required to submit.':''}</div>
     <div class="frow3">
      <div><label class="f">Parameter label</label><input id="mp_label" placeholder="e.g. Fingerprint reader"></div>
      <div><label class="f">Measured value (optional)</label><input id="mp_measure" placeholder="e.g. Battery health %"></div>
@@ -2098,10 +2206,11 @@ function mdBody(){
   const rows=DB.clients.map(c=>`<tr><td><b>${esc(c.name)}</b><div class="muted" style="font-size:11px">${esc(c.address)}</div></td>
    <td>${esc(c.gstin)}<div class="muted" style="font-size:11px">PAN ${esc(c.pan||'—')}</div></td>
    <td>${esc(c.contact)}<div class="muted" style="font-size:11px">${esc(c.email)} · ${esc(c.phone)}</div></td>
+   <td>${c.blanccoOptIn?'<span class="tag">Blancco opt-in</span>':'<span class="muted" style="font-size:12px">Blancco off</span>'}</td>
    <td>${DB.projects.filter(p=>p.clientId===c.id).length}</td>
    <td><button class="btn btn-sm" onclick="editClient('${c.id}')">Edit</button></td></tr>`).join('');
   return `<div class="card"><div class="card-h"><h3>Clients</h3><button class="btn btn-p btn-sm" onclick="editClient()">+ New client</button></div>
-   <div class="tblwrap"><table><thead><tr><th>Client</th><th>GSTIN / PAN</th><th>Contact</th><th>Projects</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+   <div class="tblwrap"><table><thead><tr><th>Client</th><th>GSTIN / PAN</th><th>Contact</th><th>Blancco</th><th>Projects</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
  }
  if(MD_TAB==='company'){
   const c=DB.company;
@@ -2165,6 +2274,10 @@ function editClient(id){
    <div><label class="f">Phone</label><input id="cl_phone" value="${c?esc(c.phone):''}"></div></div>
   <label class="f">Email</label><input id="cl_email" value="${c?esc(c.email):''}">
   <label class="f">Address</label><input id="cl_addr" value="${c?esc(c.address):''}">
+  <label class="f" style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-weight:500">
+   <input type="checkbox" id="cl_blancco" ${c&&c.blanccoOptIn?'checked':''} style="margin-top:3px">
+   <span>Use Blancco erasure reports for this client (optional). When checked, CircuitLoop can auto-pull laptop reports. Completing or submitting a device never requires a Blancco lookup, report, or pass.</span>
+  </label>
  </div>
  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
   <button class="btn btn-p" onclick="saveClient(${c?"'"+c.id+"'":'null'})">Save</button></div>`);
@@ -2172,7 +2285,8 @@ function editClient(id){
 function saveClient(id){
  const name=$('#cl_name').value.trim();if(!name){toast('Client name is required');return;}
  const data={name:name,gstin:$('#cl_gst').value||'—',pan:$('#cl_pan').value||'—',contact:$('#cl_contact').value||'—',
-  phone:$('#cl_phone').value||'—',email:$('#cl_email').value||'—',address:$('#cl_addr').value||'—'};
+  phone:$('#cl_phone').value||'—',email:$('#cl_email').value||'—',address:$('#cl_addr').value||'—',
+  blanccoOptIn:!!($('#cl_blancco')&&$('#cl_blancco').checked)};
  if(id)Object.assign(DB.clients.find(x=>x.id===id),data);
  else DB.clients.push(Object.assign({id:'CL-'+(DB.seq.client++)},data));
  closeModal();rerender();toast('Client saved: '+name);
@@ -2240,6 +2354,6 @@ function toggleUser(id){
    ============================================================ */
 document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
 </script>
-<script src="/static/persist.js?v=brand1"></script>
+<script src="/static/persist.js?v=field2"></script>
 </body>
 </html>
