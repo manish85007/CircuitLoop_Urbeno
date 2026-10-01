@@ -1,26 +1,45 @@
 /* CircuitLoop persistence — session auth + per-record sync. Never writes the demo seed. */
 (function () {
-  const api = (method, path, body) =>
-    fetch(path, {
+  const api = (method, path, body) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(function () {
+      ctrl.abort();
+    }, 20000);
+    return fetch(path, {
       method,
       cache: "no-store",
       credentials: "include",
+      signal: ctrl.signal,
       headers: {
         Accept: "application/json",
         "Cache-Control": "no-cache",
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
-    }).then(async (res) => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const err = new Error(data.error || data.detail || "Request failed (" + res.status + ")");
-        err.status = res.status;
-        err.payload = data;
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data.error || data.detail;
+          const err = new Error(detail || "Request failed (" + res.status + ")");
+          err.status = res.status;
+          err.payload = data;
+          throw err;
+        }
+        return data;
+      })
+      .catch((err) => {
+        if (err && err.name === "AbortError") {
+          const timeout = new Error("Sign-in timed out. Check your connection and try again.");
+          timeout.status = 0;
+          throw timeout;
+        }
         throw err;
-      }
-      return data;
-    });
+      })
+      .finally(function () {
+        clearTimeout(timer);
+      });
+  };
 
   let persistTimer = null;
   let persistInFlight = null;
@@ -247,7 +266,7 @@
     const emailVal = (prefill && prefill.email) || "";
     box.innerHTML = "";
     const form = el(
-      '<form id="authform">' +
+      '<form id="authform" novalidate>' +
         '<label class="f">Work email</label>' +
         '<input id="auth_email" type="email" autocomplete="username" required placeholder="you@urbeno.in">' +
         '<div id="auth_hint" class="warn" style="margin-top:12px">Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.</div>' +
@@ -295,12 +314,33 @@
         setHint();
       });
 
+    function showError(text) {
+      msg.textContent = text || "Sign-in failed.";
+      msg.style.color = "var(--red)";
+    }
+
+    function showInfo(text) {
+      msg.style.color = "";
+      msg.textContent = text || "";
+    }
+
+    function setBusy(on, label) {
+      go.disabled = !!on;
+      emailBtn.disabled = on ? true : !emailOtpLive || emailBtn.style.display === "none";
+      if (label) go.textContent = label;
+    }
+
     function showPrimaryActions(showEmail) {
       go.style.display = "";
       emailBtn.style.display = showEmail ? "" : "none";
     }
 
+    function hideHint() {
+      if (hint) hint.style.display = "none";
+    }
+
     function renderEnroll(pending) {
+      hideHint();
       extra.innerHTML =
         '<div class="info" style="margin-top:12px">Scan this QR in <b>Google Authenticator</b>, Authy, or 1Password. Keep one CircuitLoop entry — extra entries from earlier tries will not match.</div>' +
         '<div id="auth_qr" style="display:flex;justify-content:center;margin:12px 0;padding:12px;background:#fff;border:1px solid var(--line);border-radius:10px"></div>' +
@@ -310,7 +350,7 @@
         '<div class="muted" style="font-size:11px;margin:6px 0 8px;word-break:break-all" id="auth_otpauth"></div>' +
         '<button type="button" class="btn btn-sm" id="auth_copy_otpauth" style="margin-bottom:8px">Copy otpauth URL</button>' +
         '<label class="f">Authenticator code</label>' +
-        '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">';
+        '<input id="auth_code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">';
       extra.querySelector("#auth_secret").value = pending.secret || "";
       extra.querySelector("#auth_otpauth").textContent = pending.otpauth || "";
       drawEnrollQr(pending.otpauth, extra.querySelector("#auth_qr"));
@@ -322,19 +362,19 @@
       });
       go.textContent = "Confirm authenticator";
       showPrimaryActions(false);
-      msg.style.color = "";
-      msg.textContent = pending.message || "";
+      showInfo(pending.message || "");
       extra.querySelector("#auth_code").focus();
     }
 
     function renderCode(pending, kind) {
+      hideHint();
       extra.innerHTML =
         '<label class="f" style="margin-top:12px">' +
         (kind === "email" ? "Email code" : "Authenticator code") +
         "</label>" +
-        '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">' +
+        '<input id="auth_code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">' +
         (kind === "totp"
-          ? '<button type="button" class="linklike" id="auth_reset" style="display:block;margin-top:10px;font-size:12px">Code does not match? Set up a new authenticator QR</button>'
+          ? '<button type="button" class="btn" id="auth_reset" style="width:100%;justify-content:center;margin-top:10px">Set up a new authenticator QR</button>'
           : "");
       const reset = extra.querySelector("#auth_reset");
       if (reset) {
@@ -344,16 +384,17 @@
       }
       go.textContent = "Verify and sign in";
       showPrimaryActions(false);
-      msg.style.color = "";
-      msg.textContent = pending.message || "";
+      showInfo(pending.message || "");
       extra.querySelector("#auth_code").focus();
     }
 
     async function startWith(method) {
       const addr = String(email.value || "").trim().toLowerCase();
-      if (!addr) return;
-      go.disabled = true;
-      emailBtn.disabled = true;
+      if (!addr) {
+        showError("Enter your Urbeno email.");
+        return;
+      }
+      setBusy(true, method === "email" ? "Sending email code…" : "Continuing…");
       try {
         const pending = await api("POST", "/api/auth/start", { email: addr, method: method });
         phase = pending.factor || "totp";
@@ -361,54 +402,84 @@
         if (phase === "enroll") renderEnroll(pending);
         else renderCode(pending, phase);
       } catch (err) {
-        msg.textContent = err.message;
-        msg.style.color = "var(--red)";
+        showError(err.message);
         emailBtn.disabled = !emailOtpLive;
       } finally {
-        go.disabled = false;
+        setBusy(false);
+        if (phase === "enroll") go.textContent = "Confirm authenticator";
+        else if (phase === "pick") go.textContent = "Continue with authenticator";
+        else go.textContent = "Verify and sign in";
       }
     }
 
     form.addEventListener("submit", async function (ev) {
       ev.preventDefault();
+      ev.stopPropagation();
       const addr = String(email.value || "").trim().toLowerCase();
-      if (!addr) return;
+      if (!addr) {
+        showError("Enter your Urbeno email.");
+        return;
+      }
       if (phase === "pick") {
         await startWith("totp");
         return;
       }
-      go.disabled = true;
+      const code = String((extra.querySelector("#auth_code") || {}).value || "").trim().replace(/\s+/g, "");
+      if (!/^\d{6,8}$/.test(code)) {
+        showError("Enter the 6-digit code from your authenticator (or email).");
+        return;
+      }
+      const prevLabel = go.textContent;
+      setBusy(true, "Signing in…");
       try {
-        const code = String((extra.querySelector("#auth_code") || {}).value || "").trim();
         const data = await api("POST", "/api/auth/verify", { email: addr, code: code });
-        await afterSignIn(data.user);
+        if (!data || !data.user || !data.user.id) {
+          throw new Error("Sign-in did not return a session user.");
+        }
+        await afterSignIn(data.user, showError);
       } catch (err) {
-        msg.textContent = err.message;
-        msg.style.color = "var(--red)";
+        showError(err.message);
       } finally {
-        go.disabled = false;
+        setBusy(false, prevLabel || "Verify and sign in");
       }
     });
 
     emailBtn.addEventListener("click", async function () {
       if (!emailOtpLive) {
-        msg.textContent = "Email OTP is not configured. Use authenticator.";
-        msg.style.color = "var(--red)";
+        showError("Email OTP is not configured. Use authenticator.");
         return;
       }
       await startWith("email");
     });
   }
 
-  async function afterSignIn(user) {
+  async function afterSignIn(user, onError) {
+    let hydrateErr = null;
     try {
-      await hydrateFromServer();
+      const ok = await hydrateFromServer();
+      if (!ok) hydrateErr = new Error("Register did not load after sign-in.");
     } catch (err) {
-      if (typeof toast === "function") toast(err.message);
-      return;
+      hydrateErr = err;
     }
-    if (typeof origLogin === "function" && user && user.id) origLogin(user.id);
+    if (hydrateErr && hydrateErr.status === 401) {
+      throw new Error(
+        "Signed in but the browser did not keep the session cookie. Allow cookies for this site, then try again."
+      );
+    }
+    if (typeof origLogin === "function" && user && user.id) {
+      origLogin(user.id, user);
+    } else {
+      throw new Error("Sign-in succeeded but the session user was missing.");
+    }
+    const app = document.getElementById("appview");
+    if (!app || app.classList.contains("hide")) {
+      const fail = hydrateErr || new Error("Signed in but the console did not open. Try again.");
+      if (typeof onError === "function") onError(fail.message);
+      else if (typeof toast === "function") toast(fail.message);
+      throw fail;
+    }
     ready = true;
+    if (hydrateErr && typeof toast === "function") toast(hydrateErr.message);
   }
 
   const origLogin = window.login;
@@ -483,7 +554,7 @@
       showAuth();
       return;
     }
-    if (typeof origLogin === "function") origLogin(sessionUser.id);
+    if (typeof origLogin === "function") origLogin(sessionUser.id, sessionUser);
     ready = true;
   }
 

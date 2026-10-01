@@ -171,8 +171,8 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod2" in html
-    assert "qrcode.min.js?v=prod2" in html
+    assert "persist.js?v=prod3" in html
+    assert "qrcode.min.js?v=prod3" in html
     assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
@@ -182,6 +182,7 @@ def test_index_production_login(client):
     assert "/api/auth/start" in persist.text
     assert "auth_qr" in persist.text
     assert "Email me a code" in persist.text
+    assert "Signing in" in persist.text
     assert "we will not send a fake code" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
@@ -252,6 +253,18 @@ def test_headers_present(client):
     assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
     assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
     assert res.json()["emailOtp"] is False
+
+
+def test_health_email_otp_follows_env(client, monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.gmail.com")
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    assert res.json()["emailOtp"] is True
+
+
+def test_verify_sets_session_cookie(client):
+    enroll_and_login(client)
+    assert client.cookies.get("circuitloop_session")
 
 
 def test_enroll_reuses_secret_and_survives_memory_clear(client):

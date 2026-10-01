@@ -31,23 +31,45 @@ BRAND = "CircuitLoop"
 SCHEMA_VERSION = "production-v1"
 CUTOVER_ID = "2026-10-01-production-harden"
 
-SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "").strip()
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "circuitloop@urbeno.in")
-SMTP_STARTTLS = os.environ.get("SMTP_STARTTLS", "1").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
+def _env_str(name: str, default: str = "") -> str:
+    text = str(os.environ.get(name, default) or "").strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1].strip()
+    return text
+
+
+def smtp_settings() -> dict:
+    host = _env_str("SMTP_HOST")
+    user = _env_str("SMTP_USER")
+    port_raw = _env_str("SMTP_PORT", "587") or "587"
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = 587
+    starttls = _env_str("SMTP_STARTTLS", "1").lower() not in {"0", "false", "no", "off"}
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": os.environ.get("SMTP_PASSWORD", ""),
+        "from_addr": _env_str("SMTP_FROM", user or "circuitloop@urbeno.in") or (user or "circuitloop@urbeno.in"),
+        "starttls": starttls,
+    }
+
+
+# Snapshots for local defaults; request paths re-read via smtp_settings().
+SMTP_HOST = smtp_settings()["host"]
+SMTP_PORT = smtp_settings()["port"]
+SMTP_USER = smtp_settings()["user"]
+SMTP_PASSWORD = smtp_settings()["password"]
+SMTP_FROM = smtp_settings()["from_addr"]
+SMTP_STARTTLS = smtp_settings()["starttls"]
 
 BOOTSTRAP_TOKEN = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
 
 
 def email_otp_enabled() -> bool:
-    return bool(SMTP_HOST)
+    return bool(smtp_settings()["host"])
 
 
 def cookie_secure() -> bool:

@@ -22,15 +22,10 @@ from app.config import (
     COOKIE_NAME,
     SESSION_HOURS,
     SESSION_SECRET,
-    SMTP_FROM,
-    SMTP_HOST,
-    SMTP_PASSWORD,
-    SMTP_PORT,
-    SMTP_STARTTLS,
-    SMTP_USER,
     cookie_secure,
     email_otp_enabled,
     ensure_dirs,
+    smtp_settings,
 )
 
 serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="circuitloop-field")
@@ -252,19 +247,29 @@ def require_admin(request: Request) -> dict:
     return user
 
 
+def _sanitize_smtp_error(exc: BaseException) -> str:
+    cfg = smtp_settings()
+    text = f"{type(exc).__name__}: {exc}"
+    for secret in (cfg.get("password"), cfg.get("user")):
+        if secret:
+            text = text.replace(str(secret), "***")
+    return text.replace("\n", " ")[:220]
+
+
 def _send_email(to_addr: str, subject: str, body: str) -> None:
-    if not SMTP_HOST:
+    cfg = smtp_settings()
+    if not cfg["host"]:
         raise RuntimeError("SMTP is not configured.")
     msg = EmailMessage()
-    msg["From"] = SMTP_FROM
+    msg["From"] = cfg["from_addr"]
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-        if SMTP_STARTTLS:
+    with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as smtp:
+        if cfg["starttls"]:
             smtp.starttls()
-        if SMTP_USER:
-            smtp.login(SMTP_USER, SMTP_PASSWORD)
+        if cfg["user"]:
+            smtp.login(cfg["user"], cfg["password"])
         smtp.send_message(msg)
 
 
@@ -321,7 +326,9 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
         except Exception as exc:
             raise HTTPException(
                 status_code=503,
-                detail="Could not send email OTP. Use authenticator (TOTP) or check SMTP settings.",
+                detail="Could not send email OTP ("
+                + _sanitize_smtp_error(exc)
+                + "). Use authenticator or check SMTP settings.",
             ) from exc
         append_audit(account, "auth.start", "session", addr, "email OTP sent")
         return {
@@ -414,7 +421,10 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
             used = "email"
 
     if not ok:
-        raise HTTPException(status_code=401, detail="That code is not valid.")
+        raise HTTPException(
+            status_code=401,
+            detail="That authenticator code is not valid. If it keeps failing, set up a new QR and delete old CircuitLoop entries in the app.",
+        )
 
     _store_challenge(addr, None)
     _clear_attempts("start:" + addr, "verify:" + addr)
