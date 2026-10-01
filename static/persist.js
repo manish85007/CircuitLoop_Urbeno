@@ -372,19 +372,22 @@
     const hint = form.querySelector("#auth_hint");
     let phase = "pick";
     let emailOtpLive = false;
+    let emailHint = "";
 
     function setHint() {
       if (!hint) return;
       if (emailOtpLive) {
-        hint.className = "info";
+        hint.className = emailHint && /Railway|RESEND|blocked/i.test(emailHint) ? "warn" : "info";
         hint.style.marginTop = "12px";
         hint.textContent =
+          emailHint ||
           "Choose authenticator (Google Authenticator / Authy / 1Password) or email a 6-digit code.";
         emailBtn.disabled = false;
       } else {
         hint.className = "warn";
         hint.style.marginTop = "12px";
         hint.textContent =
+          emailHint ||
           "Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.";
         emailBtn.disabled = true;
       }
@@ -393,6 +396,7 @@
     api("GET", "/api/health")
       .then(function (h) {
         emailOtpLive = !!(h && h.emailOtp);
+        emailHint = (h && h.emailDelivery && h.emailDelivery.hint) || "";
         setHint();
       })
       .catch(function () {

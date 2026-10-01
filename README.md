@@ -33,20 +33,20 @@ If `BOOTSTRAP_TOKEN` is set on the server, the first enroll also requires that t
 
 ### Email OTP
 
-When an email provider is configured, **Email me a code** sends a 6-digit code (10 minutes). You can still use TOTP if enrolled.
+Railway Hobby/Trial **blocks outbound SMTP** (ports 25, 465, 587). Gmail `SMTP_HOST=smtp.gmail.com` on the web service will 503. Prefer **Resend/SendGrid/Mailgun HTTPS** on the **web** service. Authenticator still works.
 
-Railway commonly drops outbound SMTP. Prefer **Resend** (HTTPS) if Gmail SMTP times out.
+Set these on the Railway **web** service (not a worker):
 
 | Variable | Purpose |
 | --- | --- |
-| `SMTP_HOST` | SMTP server (Gmail: `smtp.gmail.com`) |
-| `SMTP_PORT` | Default `587` (also retries `465` SSL) |
-| `SMTP_USER` / `SMTP_PASSWORD` | SMTP auth (Gmail app password, not the inbox password) |
-| `SMTP_FROM` | From address |
-| `SMTP_STARTTLS` | Default on for 587 |
-| `RESEND_API_KEY` | HTTPS email via [Resend](https://resend.com) — works on Railway when SMTP is blocked |
+| `RESEND_API_KEY` | HTTPS email via [Resend](https://resend.com) — works on Hobby |
 | `SENDGRID_API_KEY` | HTTPS email via SendGrid |
 | `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` | HTTPS email via Mailgun |
+| `SMTP_FROM` | From address (must be allowed by the HTTPS provider) |
+| `SMTP_HOST` | SMTP server (Gmail: `smtp.gmail.com`) — **Pro plan + redeploy only** |
+| `SMTP_PORT` | Default `587` (app also tries `465` SSL) |
+| `SMTP_USER` / `SMTP_PASSWORD` | SMTP auth (Gmail app password) |
+| `SMTP_STARTTLS` | Default on for 587 |
 
 Local Preview with `PREVIEW_LOGIN=1` shows the code on screen when mail cannot be sent. Production never returns the code in the API.
 

@@ -31,6 +31,7 @@ from app.config import (
     BRAND,
     ROOT,
     cors_origin_list,
+    email_delivery_public,
     email_otp_enabled,
     ensure_dirs,
     preview_login_enabled,
@@ -201,6 +202,7 @@ def health() -> JSONResponse:
             "persist": {"ready": bool(state)},
             "backup": public_backup_status(),
             "emailOtp": email_otp_enabled(),
+            "emailDelivery": email_delivery_public(),
             "previewLogin": preview_login_enabled(),
         }
     )

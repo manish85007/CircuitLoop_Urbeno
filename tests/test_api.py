@@ -28,6 +28,10 @@ def test_health_does_not_leak_paths(client):
     assert body["backup"]["keepMonthly"] == 12
 
     assert body.get("previewLogin") is False
+    delivery = body.get("emailDelivery") or {}
+    assert delivery.get("smtpConfigured") is False
+    assert delivery.get("httpsConfigured") is False
+    assert "RESEND_API_KEY" in (delivery.get("hint") or "")
 
 
 def test_docs_closed(client):
@@ -173,9 +177,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod14" in html
-    assert "qrcode.min.js?v=prod14" in html
-    assert "field.js?v=prod14" in html
+    assert "persist.js?v=prod15" in html
+    assert "qrcode.min.js?v=prod15" in html
+    assert "field.js?v=prod15" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -192,6 +196,7 @@ def test_index_production_login(client):
     assert "New users cannot be added" not in field.text
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
+    assert "emailDelivery" in persist.text
     assert "/api/auth/start" in persist.text
     assert "auth_qr" in persist.text
     assert "Email me a code" in persist.text
@@ -308,6 +313,21 @@ def test_health_email_otp_follows_env(client, monkeypatch):
     res = client.get("/api/health")
     assert res.status_code == 200
     assert res.json()["emailOtp"] is True
+    delivery = res.json()["emailDelivery"]
+    assert delivery["smtpConfigured"] is True
+    assert delivery["httpsConfigured"] is False
+    assert delivery["httpsProvider"] is None
+
+
+def test_health_email_delivery_warns_on_railway_smtp_only(client, monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    res = client.get("/api/health")
+    assert res.json()["emailOtp"] is True
+    hint = res.json()["emailDelivery"]["hint"]
+    assert "RESEND_API_KEY" in hint
+    assert "web service" in hint
+    assert "Hobby" in hint
 
 
 def test_verify_sets_session_cookie(client):
@@ -371,18 +391,21 @@ def test_verify_and_session_return_super_admin(client):
     assert sess["name"]
 
 
-def test_smtp_transport_is_ipv4_with_465_fallback():
+def test_smtp_transport_tries_ssl_then_submission():
     from pathlib import Path
 
     from app import auth as auth_mod
 
     src = Path(auth_mod.__file__).read_text(encoding="utf-8")
     assert "AF_INET" in src
-    assert "_IPv4SMTP_SSL" in src
+    assert "AF_INET6" in src
+    assert "_DirectSMTP_SSL" in src
     assert "465" in src
     assert 'local_hostname="localhost"' in src
     assert "api.resend.com" in src
     assert "previewCode" in src
+    assert "web service" in auth_mod._smtp_blocked_message("smtp.gmail.com", [465, 587])
+    assert "RESEND_API_KEY" in auth_mod._smtp_blocked_message("smtp.gmail.com", [465, 587])
 
 
 def test_enroll_reuses_secret_and_survives_memory_clear(client):
@@ -428,6 +451,9 @@ def test_health_email_otp_follows_resend_key(client, monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_test_not_real")
     res = client.get("/api/health")
     assert res.json()["emailOtp"] is True
+    delivery = res.json()["emailDelivery"]
+    assert delivery["httpsConfigured"] is True
+    assert delivery["httpsProvider"] == "resend"
 
 
 def test_admin_verify_lockout_allows_retries(client):

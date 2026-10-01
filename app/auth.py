@@ -386,32 +386,42 @@ def _sanitize_smtp_error(exc: BaseException) -> str:
     return text.replace("\n", " ")[:220]
 
 
-def _ipv4_socket(host: str, port: int, timeout: float) -> socket.socket:
+def _smtp_socket(host: str, port: int, timeout: float) -> socket.socket:
+    """Connect without getfqdn(). Try IPv4 then IPv6 with a short timeout (Railway IPv6 is often ENETUNREACH)."""
     last: OSError | None = None
-    try:
-        infos = socket.getaddrinfo(host, int(port), socket.AF_INET, socket.SOCK_STREAM)
-    except OSError as exc:
-        raise OSError(f"SMTP IPv4 lookup failed for {host}:{port}") from exc
-    for family, socktype, proto, _, sockaddr in infos:
-        sock = socket.socket(family, socktype, proto)
-        sock.settimeout(timeout)
+    deadline = time.time() + max(1.0, float(timeout))
+    for family in (socket.AF_INET, socket.AF_INET6):
+        remaining = deadline - time.time()
+        if remaining <= 0.05:
+            break
         try:
-            sock.connect(sockaddr)
-            return sock
+            infos = socket.getaddrinfo(host, int(port), family, socket.SOCK_STREAM)
         except OSError as exc:
             last = exc
-            sock.close()
-    raise OSError(f"SMTP IPv4 unreachable ({host}:{port})") from last
+            continue
+        for fam, socktype, proto, _, sockaddr in infos[:3]:
+            remaining = deadline - time.time()
+            if remaining <= 0.05:
+                break
+            sock = socket.socket(fam, socktype, proto)
+            sock.settimeout(min(remaining, max(1.0, float(timeout))))
+            try:
+                sock.connect(sockaddr)
+                return sock
+            except OSError as exc:
+                last = exc
+                sock.close()
+    raise OSError(f"SMTP unreachable ({host}:{port})") from last
 
 
-class _IPv4SMTP(smtplib.SMTP):
+class _DirectSMTP(smtplib.SMTP):
     def _get_socket(self, host, port, timeout):
-        return _ipv4_socket(host, port, timeout)
+        return _smtp_socket(host, port, timeout)
 
 
-class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
+class _DirectSMTP_SSL(smtplib.SMTP_SSL):
     def _get_socket(self, host, port, timeout):
-        raw = _ipv4_socket(host, port, timeout)
+        raw = _smtp_socket(host, port, timeout)
         context = getattr(self, "context", None) or ssl.create_default_context()
         return context.wrap_socket(raw, server_hostname=host)
 
@@ -434,10 +444,22 @@ def _smtp_network_blocked(exc: BaseException) -> bool:
     return False
 
 
+def _smtp_blocked_message(host: str, ports: list[int]) -> str:
+    return (
+        "SMTP blocked from this host ("
+        + str(host)
+        + "). Tried "
+        + ", ".join(str(p) for p in ports)
+        + ". Railway Hobby/Trial drops outbound 25/465/587, so Gmail SMTP cannot send. "
+        "On the web service set RESEND_API_KEY (or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN). "
+        "SMTP_HOST/SMTP_USER/SMTP_PASSWORD need Railway Pro plus a redeploy. Use authenticator until then."
+    )
+
+
 def _send_via(cfg: dict[str, Any], msg: EmailMessage, port: int, use_ssl: bool, starttls: bool) -> None:
-    timeout = min(6.0, max(2.0, float(cfg.get("timeout") or 5)))
+    timeout = min(3.0, max(1.5, float(cfg.get("timeout") or 2)))
     host = cfg["host"]
-    cls = _IPv4SMTP_SSL if use_ssl else _IPv4SMTP
+    cls = _DirectSMTP_SSL if use_ssl else _DirectSMTP
     with cls(host, int(port), local_hostname="localhost", timeout=timeout) as smtp:
         smtp.ehlo()
         if starttls and not use_ssl:
@@ -450,19 +472,13 @@ def _send_via(cfg: dict[str, Any], msg: EmailMessage, port: int, use_ssl: bool, 
 
 def _send_smtp(cfg: dict[str, Any], msg: EmailMessage) -> None:
     port = int(cfg["port"] or 587)
-    use_ssl = bool(cfg.get("ssl") or port == 465)
-    starttls = bool(cfg.get("starttls")) and not use_ssl
-    attempts: list[tuple[int, bool, bool]] = []
-    if port == 465 or use_ssl:
-        attempts.append((465 if port == 465 else port, True, False))
-        if port != 587:
-            attempts.append((587, False, True))
-    else:
-        attempts.append((port, use_ssl, starttls))
-        if port != 465:
-            attempts.append((465, True, False))
+    ordered: list[tuple[int, bool, bool]] = [(465, True, False), (587, False, True)]
+    if port not in {465, 587}:
+        use_ssl = bool(cfg.get("ssl") or port == 465)
+        starttls = bool(cfg.get("starttls")) and not use_ssl
+        ordered.insert(0, (port, use_ssl, starttls))
     last: BaseException | None = None
-    for try_port, ssl_on, tls_on in attempts:
+    for try_port, ssl_on, tls_on in ordered:
         try:
             _send_via(cfg, msg, try_port, ssl_on, tls_on)
             return
@@ -472,13 +488,7 @@ def _send_smtp(cfg: dict[str, Any], msg: EmailMessage) -> None:
                 continue
             raise
     assert last is not None
-    raise OSError(
-        "SMTP blocked from this host (IPv4 "
-        + str(cfg["host"])
-        + "). Tried "
-        + ", ".join(str(p) for p, _, _ in attempts)
-        + ". Set RESEND_API_KEY (HTTPS) or use authenticator."
-    ) from last
+    raise OSError(_smtp_blocked_message(str(cfg["host"]), [p for p, _, _ in ordered])) from last
 
 
 def _http_post(url: str, data: bytes, headers: dict[str, str], timeout: float = 8) -> bytes:
@@ -559,7 +569,7 @@ def _send_email(to_addr: str, subject: str, body: str) -> bool:
         msg["To"] = to_addr
         msg["Subject"] = subject
         msg.set_content(body)
-        timeout = min(12.0, max(6.0, float(cfg.get("timeout") or 5) * 2 + 2))
+        timeout = min(8.0, max(4.0, float(cfg.get("timeout") or 2) * 2 + 2))
         with ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_send_smtp, cfg, msg)
             try:
@@ -635,7 +645,7 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
                 status_code=503,
                 detail="Could not send email OTP ("
                 + _sanitize_smtp_error(send_err or RuntimeError("SMTP is not configured."))
-                + "). Use authenticator, or set RESEND_API_KEY for HTTPS delivery on Railway.",
+                + "). Use authenticator, or set RESEND_API_KEY / SENDGRID_API_KEY / MAILGUN_API_KEY on the web service.",
             ) from send_err
         append_audit(
             account,

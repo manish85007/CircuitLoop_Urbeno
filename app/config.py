@@ -86,10 +86,50 @@ BOOTSTRAP_TOKEN = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
 def email_otp_enabled() -> bool:
     if preview_login_enabled():
         return True
-    if smtp_settings()["host"]:
-        return True
+    status = email_delivery_public()
+    return bool(status["smtpConfigured"] or status["httpsConfigured"])
+
+
+def email_delivery_public() -> dict:
+    """Health-safe mail status. Never includes host, user, or secrets."""
+    cfg = smtp_settings()
     http = http_mail_settings()
-    return bool(http["resend"] or http["sendgrid"] or (http["mailgun_key"] and http["mailgun_domain"]))
+    smtp = bool(cfg["host"])
+    https_provider = None
+    if http["resend"]:
+        https_provider = "resend"
+    elif http["sendgrid"]:
+        https_provider = "sendgrid"
+    elif http["mailgun_key"] and http["mailgun_domain"]:
+        https_provider = "mailgun"
+    https = https_provider is not None
+    hint = ""
+    if https:
+        hint = "Email OTP is sent over HTTPS."
+    elif smtp and is_production():
+        hint = (
+            "SMTP is set on this web process, but Railway Hobby/Trial blocks outbound "
+            "ports 25/465/587 (Gmail SMTP cannot send). On the web service set RESEND_API_KEY, "
+            "or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN. "
+            "SMTP_HOST/SMTP_USER/SMTP_PASSWORD only work after a Railway Pro upgrade and redeploy. "
+            "Authenticator still works."
+        )
+    elif smtp:
+        hint = "Email OTP will use SMTP."
+    elif preview_login_enabled():
+        hint = "Preview: email codes show on the login card when SMTP/HTTPS is not configured."
+    else:
+        hint = (
+            "Email OTP is off. On the web service set RESEND_API_KEY "
+            "(or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN), "
+            "or SMTP_HOST/SMTP_USER/SMTP_PASSWORD on Railway Pro."
+        )
+    return {
+        "smtpConfigured": smtp,
+        "httpsConfigured": https,
+        "httpsProvider": https_provider,
+        "hint": hint,
+    }
 
 
 def cookie_secure() -> bool:
