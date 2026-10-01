@@ -249,10 +249,25 @@ def _cookie_clear_kwargs() -> dict:
     }
 
 
+def _expire_named_cookie(response: Response, name: str) -> None:
+    kwargs = _cookie_clear_kwargs()
+    for secure in (True, False):
+        response.delete_cookie(name, secure=secure, **kwargs)
+        response.set_cookie(
+            name,
+            "",
+            max_age=0,
+            expires=0,
+            httponly=True,
+            samesite="lax",
+            secure=secure,
+            path="/",
+        )
+
+
 def clear_session(response: Response) -> None:
     # Delete both Secure and non-Secure variants so HTTPS and local cookies actually leave the browser.
-    for secure in (True, False):
-        response.delete_cookie(COOKIE_NAME, secure=secure, **_cookie_clear_kwargs())
+    _expire_named_cookie(response, COOKIE_NAME)
 
 
 def mark_signed_out(response: Response) -> None:
@@ -268,18 +283,40 @@ def mark_signed_out(response: Response) -> None:
 
 
 def _clear_signed_out_cookie(response: Response) -> None:
-    for secure in (True, False):
-        response.delete_cookie(SIGNED_OUT_COOKIE, secure=secure, **_cookie_clear_kwargs())
+    _expire_named_cookie(response, SIGNED_OUT_COOKIE)
 
 
 def signed_out_blocked(request: Request) -> bool:
     return str(request.cookies.get(SIGNED_OUT_COOKIE) or "") == "1"
 
 
+def peek_session_payload(request: Request) -> dict[str, Any] | None:
+    """Signed cookie payload without role/sessionVersion checks — used to revoke on Sign out."""
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return None
+    try:
+        payload = serializer.loads(token, max_age=SESSION_HOURS * 3600)
+    except (BadSignature, SignatureExpired):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def discard_invalid_session_cookie(request: Request, response: Response) -> None:
+    if not request.cookies.get(COOKIE_NAME):
+        return
+    if read_session(request) is None:
+        clear_session(response)
+
+
 def end_session(request: Request, response: Response) -> None:
-    session = read_session(request)
-    if session and session.get("email"):
-        bump_session_version(session["email"])
+    peeked = peek_session_payload(request)
+    email = normalize_email((peeked or {}).get("email"))
+    if not email:
+        session = read_session(request)
+        email = normalize_email((session or {}).get("email"))
+    if email:
+        bump_session_version(email)
     clear_session(response)
     mark_signed_out(response)
 

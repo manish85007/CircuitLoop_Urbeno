@@ -173,9 +173,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod13" in html
-    assert "qrcode.min.js?v=prod13" in html
-    assert "field.js?v=prod13" in html
+    assert "persist.js?v=prod14" in html
+    assert "qrcode.min.js?v=prod14" in html
+    assert "field.js?v=prod14" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -204,6 +204,10 @@ def test_index_production_login(client):
     assert "enterField" in persist.text
     assert "leaveField" in persist.text
     assert "clSignedOut" in persist.text
+    assert "localStorage" in persist.text
+    assert "keepalive" in persist.text
+    assert "revokeServerSession" in persist.text
+    assert "forceLoginScreen" in persist.text
     assert "paintLive" in persist.text
     assert "dbSeed" in persist.text
     assert "ensureLists" in persist.text
@@ -318,10 +322,26 @@ def test_logout_clears_session_and_rejects_old_cookie(client):
     assert client.get("/api/state").status_code == 200
     out = client.delete("/api/session")
     assert out.status_code == 200
+    set_cookie = "\n".join(
+        v.decode() if isinstance(v, bytes) else v
+        for k, v in out.headers.raw
+        if k.lower() == b"set-cookie"
+    )
+    assert "circuitloop_session=" in set_cookie
+    assert "Max-Age=0" in set_cookie
+    assert "circuitloop_signed_out=1" in set_cookie
     assert client.get("/api/session").json()["user"] is None
     assert client.get("/api/state").status_code == 401
     client.cookies.set("circuitloop_session", token)
-    assert client.get("/api/session").json()["user"] is None
+    dead = client.get("/api/session")
+    assert dead.json()["user"] is None
+    dead_set = "\n".join(
+        v.decode() if isinstance(v, bytes) else v
+        for k, v in dead.headers.raw
+        if k.lower() == b"set-cookie"
+    )
+    assert "circuitloop_session=" in dead_set
+    assert "Max-Age=0" in dead_set
     assert client.get("/api/state").status_code == 401
 
 

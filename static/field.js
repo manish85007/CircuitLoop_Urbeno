@@ -432,7 +432,8 @@ function show(v){
  ensureDbLists();
  const user=currentUser();
  if(!user){
-  paintFallback(v||'dashboard', new Error('Sign-in session was not attached to Field.'));
+  leaveField();
+  if(window.CircuitLoopPersist&&CircuitLoopPersist.showAuth)CircuitLoopPersist.showAuth();
   return;
  }
  try{ME=user;window.ME=user;}catch(e){}

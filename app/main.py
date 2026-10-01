@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.audit import recent_audit
 from app.auth import (
+    discard_invalid_session_cookie,
     end_session,
     issue_session,
     read_session,
@@ -115,11 +116,15 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
             if path == "/api/assets/import-template.csv" and method == "GET":
                 session = read_session(request)
                 if not session:
-                    return api_json({"error": "Sign in to continue."}, 401)
+                    payload = api_json({"error": "Sign in to continue."}, 401)
+                    discard_invalid_session_cookie(request, payload)
+                    return payload
                 return await call_next(request)
             session = read_session(request)
             if not session:
-                return api_json({"error": "Sign in to continue."}, 401)
+                payload = api_json({"error": "Sign in to continue."}, 401)
+                discard_invalid_session_cookie(request, payload)
+                return payload
             request.state.user = session
         return await call_next(request)
 
@@ -221,7 +226,9 @@ def auth_verify(body: VerifyIn) -> JSONResponse:
 def read_current_session(request: Request) -> JSONResponse:
     session = read_session(request)
     if not session:
-        return api_json({"user": None})
+        payload = api_json({"user": None})
+        discard_invalid_session_cookie(request, payload)
+        return payload
     return api_json(
         {
             "user": {

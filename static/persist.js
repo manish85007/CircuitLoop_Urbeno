@@ -53,6 +53,78 @@
   let lastSnap = null;
   let dirty = false;
   const dbSeed = typeof DB !== "undefined" ? clone(DB) : {};
+  const SIGNED_OUT_KEY = "clSignedOut";
+
+  function readSignedOut() {
+    try {
+      if (sessionStorage.getItem(SIGNED_OUT_KEY) === "1") return true;
+    } catch (err) {}
+    try {
+      if (localStorage.getItem(SIGNED_OUT_KEY) === "1") return true;
+    } catch (err) {}
+    return false;
+  }
+
+  function markClientSignedOut() {
+    ready = false;
+    try {
+      sessionStorage.setItem(SIGNED_OUT_KEY, "1");
+    } catch (err) {}
+    try {
+      localStorage.setItem(SIGNED_OUT_KEY, "1");
+    } catch (err) {}
+  }
+
+  function clearClientSignedOut() {
+    try {
+      sessionStorage.removeItem(SIGNED_OUT_KEY);
+    } catch (err) {}
+    try {
+      localStorage.removeItem(SIGNED_OUT_KEY);
+    } catch (err) {}
+  }
+
+  function forceLoginScreen() {
+    ready = false;
+    try {
+      window.__clUser = null;
+    } catch (err) {}
+    try {
+      window.ME = null;
+    } catch (err) {}
+    try {
+      ME = null;
+    } catch (err) {}
+    try {
+      if (typeof window.leaveField === "function") window.leaveField();
+    } catch (err) {}
+    const loginview = document.getElementById("loginview");
+    const appview = document.getElementById("appview");
+    if (appview) appview.classList.add("hide");
+    if (loginview) loginview.classList.remove("hide");
+    showAuth();
+  }
+
+  async function liveSessionUser() {
+    try {
+      const sess = await api("GET", "/api/session");
+      return sess && sess.user ? sess.user : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async function revokeServerSession() {
+    try {
+      await fetch("/api/session", {
+        method: "DELETE",
+        cache: "no-store",
+        credentials: "include",
+        keepalive: true,
+        headers: { Accept: "application/json" },
+      });
+    } catch (err) {}
+  }
 
   function ensureLists() {
     if (typeof DB === "undefined") return;
@@ -606,9 +678,7 @@
       );
     }
     openFieldApp(sessionUser);
-    try {
-      sessionStorage.removeItem("clSignedOut");
-    } catch (err) {}
+    clearClientSignedOut();
     const app = document.getElementById("appview");
     if (!app || app.classList.contains("hide")) {
       const fail = new Error("Signed in but the console did not open. Refresh and try again.");
@@ -633,24 +703,14 @@
 
   const origLogout = window.logout;
   window.logout = function () {
-    ready = false;
+    markClientSignedOut();
     try {
-      sessionStorage.setItem("clSignedOut", "1");
+      if (typeof origLogout === "function") origLogout();
     } catch (err) {}
-    try {
-      if (typeof window.leaveField === "function") window.leaveField();
-      else if (typeof origLogout === "function") origLogout();
-    } catch (err) {}
-    const loginview = document.getElementById("loginview");
-    const appview = document.getElementById("appview");
-    if (appview) appview.classList.add("hide");
-    if (loginview) loginview.classList.remove("hide");
-    showAuth();
-    return api("DELETE", "/api/session")
-      .catch(function () {})
-      .finally(function () {
-        showAuth();
-      });
+    forceLoginScreen();
+    return revokeServerSession().then(function () {
+      forceLoginScreen();
+    });
   };
 
   const origRerender = window.rerender;
@@ -681,24 +741,31 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") pullIfNewer();
+    if (document.visibilityState !== "visible") return;
+    if (readSignedOut()) {
+      forceLoginScreen();
+      return;
+    }
+    pullIfNewer();
   });
-  window.addEventListener("pageshow", () => {
-    try {
-      if (sessionStorage.getItem("clSignedOut") === "1") {
-        ready = false;
-        try {
-          if (typeof window.leaveField === "function") window.leaveField();
-        } catch (err) {}
-        const loginview = document.getElementById("loginview");
-        const appview = document.getElementById("appview");
-        if (appview) appview.classList.add("hide");
-        if (loginview) loginview.classList.remove("hide");
-        showAuth();
+  window.addEventListener("pageshow", function () {
+    if (readSignedOut()) {
+      forceLoginScreen();
+      revokeServerSession();
+      return;
+    }
+    liveSessionUser().then(function (user) {
+      if (readSignedOut()) {
+        forceLoginScreen();
+        revokeServerSession();
         return;
       }
-    } catch (err) {}
-    pullIfNewer();
+      if (!user) {
+        forceLoginScreen();
+        return;
+      }
+      pullIfNewer();
+    });
   });
 
   window.CircuitLoopPersist = {
@@ -711,32 +778,26 @@
   };
 
   async function bootFromServer() {
-    let signedOut = false;
-    try {
-      signedOut = sessionStorage.getItem("clSignedOut") === "1";
-    } catch (e) {}
+    const signedOut = readSignedOut();
+    if (signedOut) {
+      await revokeServerSession();
+      forceLoginScreen();
+      return;
+    }
     try {
       const health = await api("GET", "/api/health");
-      if (health && health.previewLogin && !signedOut) {
+      if (health && health.previewLogin && !readSignedOut()) {
         await api("POST", "/api/preview/login");
       }
     } catch (e) {}
-    if (signedOut) {
-      try {
-        await api("DELETE", "/api/session");
-      } catch (e) {}
-      showAuth();
-      ready = false;
+    if (readSignedOut()) {
+      await revokeServerSession();
+      forceLoginScreen();
       return;
     }
-    let sessionUser = null;
-    try {
-      const sess = await api("GET", "/api/session");
-      sessionUser = sess.user;
-    } catch (e) {}
+    const sessionUser = await liveSessionUser();
     if (!sessionUser) {
-      showAuth();
-      ready = false;
+      forceLoginScreen();
       return;
     }
     try {
@@ -746,8 +807,7 @@
     }
     const user = sessionUserFrom(sessionUser);
     if (!user) {
-      showAuth();
-      ready = false;
+      forceLoginScreen();
       return;
     }
     openFieldApp(user);
