@@ -606,6 +606,9 @@
       );
     }
     openFieldApp(sessionUser);
+    try {
+      sessionStorage.removeItem("clSignedOut");
+    } catch (err) {}
     const app = document.getElementById("appview");
     if (!app || app.classList.contains("hide")) {
       const fail = new Error("Signed in but the console did not open. Refresh and try again.");
@@ -632,6 +635,9 @@
   window.logout = function () {
     ready = false;
     try {
+      sessionStorage.setItem("clSignedOut", "1");
+    } catch (err) {}
+    try {
       if (typeof window.leaveField === "function") window.leaveField();
       else if (typeof origLogout === "function") origLogout();
     } catch (err) {}
@@ -639,12 +645,12 @@
     const appview = document.getElementById("appview");
     if (appview) appview.classList.add("hide");
     if (loginview) loginview.classList.remove("hide");
-    api("DELETE", "/api/session")
+    showAuth();
+    return api("DELETE", "/api/session")
       .catch(function () {})
       .finally(function () {
         showAuth();
       });
-    showAuth();
   };
 
   const origRerender = window.rerender;
@@ -678,6 +684,20 @@
     if (document.visibilityState === "visible") pullIfNewer();
   });
   window.addEventListener("pageshow", () => {
+    try {
+      if (sessionStorage.getItem("clSignedOut") === "1") {
+        ready = false;
+        try {
+          if (typeof window.leaveField === "function") window.leaveField();
+        } catch (err) {}
+        const loginview = document.getElementById("loginview");
+        const appview = document.getElementById("appview");
+        if (appview) appview.classList.add("hide");
+        if (loginview) loginview.classList.remove("hide");
+        showAuth();
+        return;
+      }
+    } catch (err) {}
     pullIfNewer();
   });
 
@@ -691,12 +711,24 @@
   };
 
   async function bootFromServer() {
+    let signedOut = false;
+    try {
+      signedOut = sessionStorage.getItem("clSignedOut") === "1";
+    } catch (e) {}
     try {
       const health = await api("GET", "/api/health");
-      if (health && health.previewLogin) {
+      if (health && health.previewLogin && !signedOut) {
         await api("POST", "/api/preview/login");
       }
     } catch (e) {}
+    if (signedOut) {
+      try {
+        await api("DELETE", "/api/session");
+      } catch (e) {}
+      showAuth();
+      ready = false;
+      return;
+    }
     let sessionUser = null;
     try {
       const sess = await api("GET", "/api/session");

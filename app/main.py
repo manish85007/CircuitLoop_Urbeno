@@ -14,11 +14,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.audit import recent_audit
 from app.auth import (
-    clear_session,
+    end_session,
     issue_session,
     read_session,
     require_admin,
     require_user,
+    signed_out_blocked,
     start_login,
     verify_login,
 )
@@ -234,9 +235,10 @@ def read_current_session(request: Request) -> JSONResponse:
 
 
 @app.delete("/api/session")
-def sign_out(response: Response) -> JSONResponse:
-    clear_session(response)
-    return api_json({"ok": True})
+def sign_out(request: Request) -> JSONResponse:
+    payload = api_json({"ok": True})
+    end_session(request, payload)
+    return payload
 
 
 @app.post("/api/preview/login")
@@ -244,6 +246,9 @@ def preview_login(request: Request) -> JSONResponse:
     host = (request.headers.get("host") or "").split(":")[0].lower()
     if not preview_login_enabled() or host not in {"127.0.0.1", "localhost", "testserver"}:
         return api_json({"error": "Not found."}, 404)
+    if signed_out_blocked(request):
+        payload = api_json({"error": "Signed out. Sign in with email.", "user": None}, 401)
+        return payload
     from app.accounts import ADMIN_EMAIL, account_for_email, public_user
 
     account = account_for_email(ADMIN_EMAIL)

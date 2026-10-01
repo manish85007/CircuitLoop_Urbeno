@@ -173,9 +173,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod12" in html
-    assert "qrcode.min.js?v=prod12" in html
-    assert "field.js?v=prod12" in html
+    assert "persist.js?v=prod13" in html
+    assert "qrcode.min.js?v=prod13" in html
+    assert "field.js?v=prod13" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -203,6 +203,7 @@ def test_index_production_login(client):
     assert "Email a new code" in persist.text
     assert "enterField" in persist.text
     assert "leaveField" in persist.text
+    assert "clSignedOut" in persist.text
     assert "paintLive" in persist.text
     assert "dbSeed" in persist.text
     assert "ensureLists" in persist.text
@@ -308,6 +309,34 @@ def test_health_email_otp_follows_env(client, monkeypatch):
 def test_verify_sets_session_cookie(client):
     enroll_and_login(client)
     assert client.cookies.get("circuitloop_session")
+
+
+def test_logout_clears_session_and_rejects_old_cookie(client):
+    enroll_and_login(client)
+    token = client.cookies.get("circuitloop_session")
+    assert token
+    assert client.get("/api/state").status_code == 200
+    out = client.delete("/api/session")
+    assert out.status_code == 200
+    assert client.get("/api/session").json()["user"] is None
+    assert client.get("/api/state").status_code == 401
+    client.cookies.set("circuitloop_session", token)
+    assert client.get("/api/session").json()["user"] is None
+    assert client.get("/api/state").status_code == 401
+
+
+def test_preview_login_does_not_reopen_after_sign_out(client, monkeypatch):
+    monkeypatch.setenv("PREVIEW_LOGIN", "1")
+    monkeypatch.setenv("COOKIE_SECURE", "0")
+    opened = client.post("/api/preview/login")
+    assert opened.status_code == 200
+    assert client.get("/api/session").json()["user"]["id"] == "U-1"
+    assert client.delete("/api/session").status_code == 200
+    assert client.get("/api/session").json()["user"] is None
+    blocked = client.post("/api/preview/login")
+    assert blocked.status_code == 401
+    assert client.get("/api/session").json()["user"] is None
+    assert client.get("/api/state").status_code == 401
 
 
 def test_verify_and_session_return_super_admin(client):

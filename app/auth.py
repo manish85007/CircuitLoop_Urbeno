@@ -202,6 +202,7 @@ def issue_session(response: Response, user: dict[str, Any]) -> None:
             "email": user["email"],
             "name": user["name"],
             "role": user["role"],
+            "sv": _session_version(user.get("email")),
             "iat": _utc(),
         }
     )
@@ -214,10 +215,73 @@ def issue_session(response: Response, user: dict[str, Any]) -> None:
         secure=cookie_secure(),
         path="/",
     )
+    _clear_signed_out_cookie(response)
+
+
+SIGNED_OUT_COOKIE = "circuitloop_signed_out"
+
+
+def _session_version(email: str | None) -> int:
+    rec = _user_auth(normalize_email(email))
+    try:
+        return int(rec.get("sessionVersion") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def bump_session_version(email: str | None) -> None:
+    addr = normalize_email(email)
+    if not addr:
+        return
+    rec = _user_auth(addr)
+    try:
+        current = int(rec.get("sessionVersion") or 1)
+    except (TypeError, ValueError):
+        current = 1
+    _put_user_auth(addr, {"sessionVersion": current + 1})
+
+
+def _cookie_clear_kwargs() -> dict:
+    return {
+        "path": "/",
+        "httponly": True,
+        "samesite": "lax",
+    }
 
 
 def clear_session(response: Response) -> None:
-    response.delete_cookie(COOKIE_NAME, path="/")
+    # Delete both Secure and non-Secure variants so HTTPS and local cookies actually leave the browser.
+    for secure in (True, False):
+        response.delete_cookie(COOKIE_NAME, secure=secure, **_cookie_clear_kwargs())
+
+
+def mark_signed_out(response: Response) -> None:
+    response.set_cookie(
+        SIGNED_OUT_COOKIE,
+        "1",
+        max_age=SESSION_HOURS * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=cookie_secure(),
+        path="/",
+    )
+
+
+def _clear_signed_out_cookie(response: Response) -> None:
+    for secure in (True, False):
+        response.delete_cookie(SIGNED_OUT_COOKIE, secure=secure, **_cookie_clear_kwargs())
+
+
+def signed_out_blocked(request: Request) -> bool:
+    return str(request.cookies.get(SIGNED_OUT_COOKIE) or "") == "1"
+
+
+def end_session(request: Request, response: Response) -> None:
+    session = read_session(request)
+    if session and session.get("email"):
+        bump_session_version(session["email"])
+    clear_session(response)
+    mark_signed_out(response)
 
 
 def _resolve_login_account(email: str | None = None, user_id: str | None = None) -> dict[str, Any] | None:
@@ -237,6 +301,12 @@ def read_session(request: Request) -> dict | None:
     email = normalize_email(payload.get("email"))
     account = _resolve_login_account(email=email, user_id=payload.get("userId"))
     if not account or account.get("active") is False:
+        return None
+    try:
+        cookie_sv = int(payload.get("sv") or 1)
+    except (TypeError, ValueError):
+        cookie_sv = 0
+    if cookie_sv != _session_version(account.get("email")):
         return None
     # Roles come from the seed list or the live register, never from the cookie.
     return {
