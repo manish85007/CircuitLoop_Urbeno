@@ -171,12 +171,16 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod4" in html
-    assert "qrcode.min.js?v=prod4" in html
+    assert "persist.js?v=prod6" in html
+    assert "qrcode.min.js?v=prod6" in html
     assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
     assert "editAssetDetails" in html
+    assert "function enterField(" in html
+    assert "function leaveField(" in html
+    assert "function canonicalizeUser(" in html
+    assert "function ensureDbLists(" in html
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
     assert "/api/auth/start" in persist.text
@@ -186,6 +190,11 @@ def test_index_production_login(client):
     assert "sessionUserFrom" in persist.text
     assert "Signing in" in persist.text
     assert "we will not send a fake code" in persist.text
+    assert "enterField" in persist.text
+    assert "leaveField" in persist.text
+    assert "dbSeed" in persist.text
+    assert "ensureLists" in persist.text
+    assert "Object.assign(DB, dbSeed, state)" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
     qr = client.get("/static/qrcode.min.js")
@@ -210,6 +219,22 @@ def test_asset_csv_parser(client):
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
         ["node", str(root / "tests" / "test_asset_csv.js")],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ok" in result.stdout
+
+
+def test_field_shell_after_partial_hydrate(client):
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        ["node", str(root / "tests" / "test_field_shell.js")],
         cwd=root,
         capture_output=True,
         text=True,

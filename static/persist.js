@@ -41,6 +41,10 @@
       });
   };
 
+  function clone(v) {
+    return JSON.parse(JSON.stringify(v));
+  }
+
   let persistTimer = null;
   let persistInFlight = null;
   let persistQueued = false;
@@ -48,16 +52,26 @@
   let applyingRemote = false;
   let lastSnap = null;
   let dirty = false;
+  const dbSeed = typeof DB !== "undefined" ? clone(DB) : {};
 
-  function clone(v) {
-    return JSON.parse(JSON.stringify(v));
+  function ensureLists() {
+    if (typeof DB === "undefined") return;
+    ["users", "clients", "projects", "assets", "manifests", "categories"].forEach(function (k) {
+      if (!Array.isArray(DB[k])) DB[k] = Array.isArray(dbSeed[k]) ? clone(dbSeed[k]) : [];
+    });
+    if (!DB.seq || typeof DB.seq !== "object") DB.seq = clone(dbSeed.seq || { asset: 1, usn: 50001, project: 1001, client: 1, user: 3, blancco: 1, manifest: 1 });
+    if (!DB.company || typeof DB.company !== "object") DB.company = clone(dbSeed.company || { name: "Urbeno Technologies Pvt Ltd", brand: "CircuitLoop Field", currency: "INR" });
+    if (!DB.testParams || typeof DB.testParams !== "object") DB.testParams = clone(dbSeed.testParams || {});
+    if (!DB.specFields || typeof DB.specFields !== "object") DB.specFields = clone(dbSeed.specFields || {});
+    if (!Array.isArray(DB.blanccoCategories)) DB.blanccoCategories = clone(dbSeed.blanccoCategories || ["Laptop"]);
   }
 
   function applyState(state) {
     if (!state || typeof state !== "object") return;
     Object.keys(DB).forEach((k) => delete DB[k]);
-    Object.assign(DB, state);
-    lastSnap = clone(state);
+    Object.assign(DB, dbSeed, state);
+    ensureLists();
+    lastSnap = clone(DB);
     dirty = false;
   }
 
@@ -105,9 +119,9 @@
 
   async function hydrateFromServer() {
     const data = await api("GET", "/api/state?ts=" + Date.now());
-    if (data.state && Array.isArray(data.state.projects)) {
+    if (data.state && typeof data.state === "object") {
       applyState(data.state);
-      return true;
+      return Array.isArray(DB.projects);
     }
     return false;
   }
@@ -463,7 +477,7 @@
       userId: id,
       name: raw.name || "",
       email: raw.email || "",
-      role: raw.role || "Field Engineer",
+      role: /super\s*admin/i.test(String(raw.role || "")) ? "Super Admin" : "Field Engineer",
       phone: raw.phone || "",
       active: raw.active !== false,
     };
@@ -493,26 +507,34 @@
   }
 
   function openFieldApp(user) {
-    ensureUserRow(user);
-    const fn = window.login;
+    const session = sessionUserFrom(user);
+    if (!session) return;
+    ensureUserRow(session);
+    if (typeof window.enterField === "function") {
+      window.enterField(session);
+      return;
+    }
+    const fn = window.__circuitloopLogin || window.login;
     if (typeof fn === "function") {
       try {
-        fn(user.id, user);
-      } catch (err) {}
+        fn(session.id, session);
+      } catch (err) {
+        if (typeof toast === "function") toast(err.message || String(err));
+      }
     }
     try {
-      ME = user;
+      ME = session;
     } catch (err) {}
     const loginview = document.getElementById("loginview");
     const appview = document.getElementById("appview");
     if (loginview) loginview.classList.add("hide");
     if (appview) appview.classList.remove("hide");
     const who = document.getElementById("whoami");
-    if (who) who.textContent = (user.name || "") + " · " + (user.role || "");
+    if (who) who.textContent = (session.name || "") + " · " + (session.role || "");
     const av = document.getElementById("whoavatar");
     if (av) {
       av.textContent =
-        String(user.name || "U")
+        String(session.name || "U")
           .split(" ")
           .map(function (p) {
             return p.charAt(0);
@@ -529,8 +551,16 @@
     }
     if (typeof show === "function") {
       try {
-        show(user.role === "Field Engineer" ? "testing" : "dashboard");
-      } catch (err) {}
+        show(session.role === "Field Engineer" ? "testing" : "dashboard");
+      } catch (err) {
+        const content = document.getElementById("content");
+        if (content) {
+          content.innerHTML =
+            '<div class="errbox">Could not open Field: ' +
+            String((err && err.message) || err) +
+            "</div>";
+        }
+      }
     }
   }
 
@@ -569,7 +599,12 @@
   }
 
   const pageLogin = window.login;
+  window.__circuitloopLogin = pageLogin;
   window.login = function (uid, fallback) {
+    if (typeof window.enterField === "function") {
+      const row = fallback && typeof fallback === "object" ? fallback : { id: uid };
+      return window.enterField(row);
+    }
     if (typeof pageLogin === "function") return pageLogin(uid, fallback);
     const user = sessionUserFrom(fallback) || sessionUserFrom({ id: uid });
     if (user) openFieldApp(user);
@@ -577,9 +612,20 @@
 
   const origLogout = window.logout;
   window.logout = function () {
-    if (typeof origLogout === "function") origLogout();
-    api("DELETE", "/api/session").catch(() => {});
     ready = false;
+    try {
+      if (typeof window.leaveField === "function") window.leaveField();
+      else if (typeof origLogout === "function") origLogout();
+    } catch (err) {}
+    const loginview = document.getElementById("loginview");
+    const appview = document.getElementById("appview");
+    if (appview) appview.classList.add("hide");
+    if (loginview) loginview.classList.remove("hide");
+    api("DELETE", "/api/session")
+      .catch(function () {})
+      .finally(function () {
+        showAuth();
+      });
     showAuth();
   };
 

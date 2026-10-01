@@ -442,14 +442,32 @@ const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 const today=()=>new Date().toISOString().slice(0,10);
 const stamp=()=>{const d=new Date();return d.toISOString().slice(0,10)+' '+d.toTimeString().slice(0,5);};
 const fmtINR=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
-const userName=id=>{const u=DB.users.find(x=>x.id===id);return u?u.name:'—';};
-const clientName=id=>{const c=DB.clients.find(x=>x.id===id);return c?c.name:'—';};
-const projectById=id=>DB.projects.find(p=>p.id===id);
+function ensureDbLists(){
+ if(typeof DB==='undefined')return;
+ ['users','clients','projects','assets','manifests'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=[];});
+ if(!Array.isArray(DB.categories)||!DB.categories.length)DB.categories=['Laptop','Desktop','Monitor','Thin Client','Tiny PC','Server','Switch','All-in-One','Tablet','Printer'];
+ if(!Array.isArray(DB.blanccoCategories)||!DB.blanccoCategories.length)DB.blanccoCategories=['Laptop'];
+ if(!DB.seq||typeof DB.seq!=='object')DB.seq={asset:1,usn:50001,project:1001,client:1,user:3,blancco:1,manifest:1};
+ if(!DB.company||typeof DB.company!=='object')DB.company={name:'Urbeno Technologies Pvt Ltd',brand:'CircuitLoop Field',currency:'INR'};
+ if(!DB.testParams||typeof DB.testParams!=='object')DB.testParams={};
+ if(!DB.specFields||typeof DB.specFields!=='object')DB.specFields={};
+}
+function canonicalizeUser(row){
+ if(!row||typeof row!=='object')return null;
+ const id=row.id||row.userId;
+ if(!id)return null;
+ const raw=String(row.role||'');
+ const role=/super\s*admin/i.test(raw)?'Super Admin':'Field Engineer';
+ return {id:id,name:row.name||'',email:row.email||'',role:role,phone:row.phone||'',active:row.active!==false};
+}
+const userName=id=>{const u=(Array.isArray(DB.users)?DB.users:[]).find(x=>x&&x.id===id);return u?u.name:'—';};
+const clientName=id=>{const c=(Array.isArray(DB.clients)?DB.clients:[]).find(x=>x&&x.id===id);return c?c.name:'—';};
+const projectById=id=>(Array.isArray(DB.projects)?DB.projects:[]).find(p=>p&&p.id===id);
 const projectName=id=>{const p=projectById(id);return p?p.name:'—';};
 function labelHtml(p){return esc(String((p&&p.label)||'').replace(/&amp;/g,'&'));}
-const paramsFor=cat=>DB.testParams[cat]||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
-const specsFor=cat=>DB.specFields[cat]||['Make/Model detail','Year'];
-const isBlanccoCat=cat=>DB.blanccoCategories.includes(cat);
+const paramsFor=cat=>(DB.testParams&&DB.testParams[cat])||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
+const specsFor=cat=>(DB.specFields&&DB.specFields[cat])||['Make/Model detail','Year'];
+const isBlanccoCat=cat=>Array.isArray(DB.blanccoCategories)&&DB.blanccoCategories.includes(cat);
 function badge(s){
  const m={'Registered':'b-gray','In Testing':'b-amber','Tested':'b-purple','Verified':'b-green','Rejected':'b-red',
   'Active':'b-teal','Planned':'b-blue','On Hold':'b-amber','Completed':'b-green','Cancelled':'b-gray',
@@ -502,7 +520,7 @@ function testProgress(a){
 function isTestComplete(a){const p=testProgress(a);return p.done===p.total;}
 function clientOfAsset(a){
  const p=projectById(a&&a.projectId);
- return p?DB.clients.find(x=>x.id===p.clientId):null;
+ return p?(Array.isArray(DB.clients)?DB.clients:[]).find(x=>x&&x.id===p.clientId):null;
 }
 function blanccoEligible(a){return !!(a&&isBlanccoCat(a.category)&&!isNoSerialValue(a.serial));}
 function blanccoOptedIn(a){const c=clientOfAsset(a);return !!(c&&c.blanccoOptIn);}
@@ -577,66 +595,99 @@ const NAV=[
  ]}
 ];
 function allowedViews(){
- const out=[];NAV.forEach(g=>g.items.forEach(i=>{if(i.roles.includes(ME.role))out.push(i.v);}));return out;
+ if(!ME)return [];
+ const role=ME.role;
+ const out=[];NAV.forEach(g=>g.items.forEach(i=>{if(i.roles.includes(role))out.push(i.v);}));return out;
 }
 function canEdit(){return ME&&ME.role==='Super Admin';}
 function myProjects(){
- if(ME.role==='Super Admin')return DB.projects;
- return DB.projects.filter(p=>p.team.includes(ME.id)||p.managerId===ME.id);
+ ensureDbLists();
+ const list=Array.isArray(DB.projects)?DB.projects:[];
+ if(!ME||ME.role==='Super Admin')return list;
+ return list.filter(p=> ((p&&p.team)||[]).includes(ME.id)||(p&&p.managerId===ME.id));
 }
 function myProjectIds(){return myProjects().map(p=>p.id);}
 function visibleAssets(){
- if(ME.role==='Super Admin')return DB.assets;
+ ensureDbLists();
+ const list=Array.isArray(DB.assets)?DB.assets:[];
+ if(!ME||ME.role==='Super Admin')return list;
  const ids=myProjectIds();
- return DB.assets.filter(a=>ids.includes(a.projectId));
+ return list.filter(a=>ids.includes(a.projectId));
 }
 function renderLogin(){
  if(window.CircuitLoopPersist&&CircuitLoopPersist.showAuth)CircuitLoopPersist.showAuth();
 }
+function enterField(user){
+ ensureDbLists();
+ const fromDb=user&&user.id?(Array.isArray(DB.users)?DB.users:[]).find(u=>u&&u.id===user.id):null;
+ const session=canonicalizeUser(user)||canonicalizeUser(fromDb);
+ if(!session){
+  toast('Signed-in account is not in this register');
+  return false;
+ }
+ ME=session;
+ const existing=(DB.users||[]).find(u=>u&&u.id===ME.id);
+ if(!existing) DB.users.push(Object.assign({},ME));
+ else{
+  existing.role=ME.role;
+  if(ME.name)existing.name=ME.name;
+  if(ME.email)existing.email=ME.email;
+ }
+ const loginview=document.getElementById('loginview');
+ const appview=document.getElementById('appview');
+ if(loginview)loginview.classList.add('hide');
+ if(appview)appview.classList.remove('hide');
+ const who=document.getElementById('whoami');
+ if(who)who.textContent=ME.name+' · '+ME.role;
+ const av=document.getElementById('whoavatar');
+ if(av)av.textContent=(ME.name||'U').split(' ').map(x=>x[0]).join('').slice(0,2)||'U';
+ const fab=document.getElementById('fab');
+ if(fab)fab.classList.remove('hide');
+ try{buildNav();}catch(err){}
+ const dest=ME.role==='Field Engineer'?'testing':'dashboard';
+ try{show(dest);}catch(err){
+  const content=document.getElementById('content');
+  if(content)content.innerHTML='<div class="errbox">Could not open Field: '+esc(err&&err.message?err.message:err)+'</div>';
+ }
+ toast('Signed in as '+ME.name+' ('+ME.role+')');
+ return true;
+}
+function leaveField(){
+ try{if(typeof stopScanner==='function')stopScanner();}catch(e){}
+ ME=null;CURRENT=null;
+ const fab=document.getElementById('fab');
+ const appview=document.getElementById('appview');
+ const loginview=document.getElementById('loginview');
+ const content=document.getElementById('content');
+ const nav=document.getElementById('nav');
+ const bar=document.getElementById('bottombar');
+ const who=document.getElementById('whoami');
+ if(fab)fab.classList.add('hide');
+ if(appview)appview.classList.add('hide');
+ if(loginview)loginview.classList.remove('hide');
+ if(content)content.innerHTML='';
+ if(nav)nav.innerHTML='';
+ if(bar)bar.innerHTML='';
+ if(who)who.textContent='';
+}
 function login(uid, fallback){
- const row = fallback && typeof fallback === "object" ? fallback : null;
- const id = (row && (row.id || row.userId)) || uid;
- ME = (DB.users || []).find(u => u && u.id === id) || null;
- if (!ME && row) {
-  ME = {
-   id: id,
-   name: row.name || "",
-   email: row.email || "",
-   role: row.role || "Field Engineer",
-   active: row.active !== false,
-   phone: row.phone || ""
-  };
- }
- if (!ME && id) {
-  ME = {id: id, name: "", email: "", role: "Field Engineer", active: true, phone: ""};
- }
- if (!ME) { toast("Signed-in account is not in this register"); return; }
- if (!(DB.users || []).some(u => u && u.id === ME.id)) {
-  if (!Array.isArray(DB.users)) DB.users = [];
-  DB.users.push(Object.assign({}, ME));
- }
- $('#loginview').classList.add('hide');
- $('#appview').classList.remove('hide');
- $('#whoami').textContent = ME.name + ' · ' + ME.role;
- $('#whoavatar').textContent = (ME.name || 'U').split(' ').map(x => x[0]).join('').slice(0, 2) || 'U';
- buildNav();
- $('#fab').classList.remove('hide');
- show(ME.role === 'Field Engineer' ? 'testing' : 'dashboard');
- toast('Signed in as ' + ME.name + ' (' + ME.role + ')');
+ const row=fallback&&typeof fallback==='object'?fallback:null;
+ const id=(row&&(row.id||row.userId))||uid;
+ const fromDb=(Array.isArray(DB.users)?DB.users:[]).find(u=>u&&u.id===id)||null;
+ return enterField(row||fromDb||(id?{id:id}:null));
 }
 function logout(){
- stopScanner();
- ME=null;CURRENT=null;
- $('#fab').classList.add('hide');
- $('#appview').classList.add('hide');
- $('#loginview').classList.remove('hide');
+ leaveField();
 }
 function buildNav(){
- $('#nav').innerHTML=NAV.map(g=>{
+ const nav=document.getElementById('nav');
+ if(!nav||!ME)return;
+ const html=NAV.map(g=>{
   const items=g.items.filter(i=>i.roles.includes(ME.role));
   if(!items.length)return '';
   return `<div class="navsec">${g.sec}</div>`+items.map(i=>`<a data-view="${i.v}" onclick="show('${i.v}')"><span class="ico">${i.ico}</span>${i.label}</a>`).join('');
  }).join('');
+ nav.innerHTML=html||'<div class="navsec">Menu</div><div class="muted" style="padding:9px 16px;font-size:12px">No modules for this role.</div>';
 }
 
 /* ============================================================
@@ -645,18 +696,29 @@ function buildNav(){
 const VIEWS={};
 let CURRENT=null;
 function show(v){
+ ensureDbLists();
+ if(!ME){return;}
  if(!allowedViews().includes(v)){toast('Your role does not have access to that module');return;}
  CURRENT=v;
+ try{buildNav();}catch(err){}
  $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===v));
  const view=VIEWS[v];
- $('#pagetitle').textContent=view.title;
- $('#pagecrumb').textContent=view.crumb||'';
- $('#content').innerHTML=view.render();
- if(view.after)view.after();
- applyMobile();
- buildBottomBar();
- toggleDrawer(false);
- window.scrollTo(0,0);
+ if(!view){toast('Unknown screen');return;}
+ const titleEl=document.getElementById('pagetitle');
+ const crumbEl=document.getElementById('pagecrumb');
+ const content=document.getElementById('content');
+ if(titleEl)titleEl.textContent=String(view.title||v).replace(/&amp;/g,'&');
+ if(crumbEl)crumbEl.textContent=view.crumb||'';
+ try{
+  if(content)content.innerHTML=view.render();
+  if(view.after)view.after();
+ }catch(err){
+  if(content)content.innerHTML='<div class="errbox">Could not open '+esc(view.title)+': '+esc(err&&err.message?err.message:err)+'</div>';
+ }
+ try{applyMobile();}catch(err){}
+ try{buildBottomBar();}catch(err){}
+ try{toggleDrawer(false);}catch(err){}
+ try{window.scrollTo(0,0);}catch(err){}
 }
 function rerender(){if(CURRENT)show(CURRENT);}
 
@@ -743,11 +805,12 @@ let ACTIVE_PROJECT=null;
 let TEST_FILTER='open';
 VIEWS.testing={title:'Scan &amp; Test',crumb:'Barcode or serial entry, category test parameters, grading',
 render(){
- const projs=myProjects().filter(p=>['Active','Planned'].includes(p.status));
+ const projs=myProjects().filter(p=>p&&['Active','Planned'].includes(p.status));
  if(!projs.length)return '<div class="warn">No active projects are assigned to you. A Super Admin needs to create a project and add you to its team.</div>';
  if(!ACTIVE_PROJECT||!projs.some(p=>p.id===ACTIVE_PROJECT))ACTIVE_PROJECT=projs[0].id;
  const p=projectById(ACTIVE_PROJECT);
- const mine=DB.assets.filter(a=>a.projectId===p.id);
+ if(!p)return '<div class="warn">The selected project is not in this register. Pick another project, or ask a Super Admin to assign you.</div>';
+ const mine=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===p.id);
  const open=mine.filter(a=>['Registered','In Testing','Rejected'].includes(a.status));
  const done=mine.filter(a=>['Tested','Verified'].includes(a.status));
  const list=TEST_FILTER==='open'?open:TEST_FILTER==='done'?done:mine;
@@ -763,7 +826,7 @@ render(){
      <button class="btn btn-sm" onclick="assetLabel('${a.id}')">Label</button>
    </td></tr>`;
  }).join('');
- const scopeChips=p.scope.map(s=>{
+ const scopeChips=(p.scope||[]).map(s=>{
   const n=mine.filter(a=>a.category===s.category).length;
   return `<span class="tag">${esc(s.category)}: ${n}/${s.expected}</span>`;
  }).join('');
@@ -1375,7 +1438,7 @@ render(){
  return `<div class="card"><div class="card-h"><h3>Assigned projects</h3></div>
  <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client / Site</th><th>Window</th><th>Status</th><th>My captures</th><th>Progress</th><th></th></tr></thead>
  <tbody>${ps.map(p=>{
-  const all=DB.assets.filter(a=>a.projectId===p.id);
+  const all=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===p.id);
   const mineN=all.filter(a=>a.testedBy===ME.id).length;
   const st=projectStats(p);
   return `<tr><td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
@@ -1390,8 +1453,8 @@ render(){
    PROJECT MASTER (Super Admin)
    ============================================================ */
 function projectStats(p){
- const all=DB.assets.filter(a=>a.projectId===p.id);
- const expected=p.scope.reduce((s,x)=>s+(+x.expected||0),0);
+ const all=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===p.id);
+ const expected=(p.scope||[]).reduce((s,x)=>s+(+x.expected||0),0);
  const tested=all.filter(a=>['Tested','Verified'].includes(a.status)).length;
  const verified=all.filter(a=>a.status==='Verified').length;
  const pending=all.filter(a=>['Registered','In Testing'].includes(a.status)).length;
@@ -1404,7 +1467,7 @@ function projectStats(p){
 let PROJ_OPEN=null;
 VIEWS.projects={title:'Projects',crumb:'Create projects, assign teams, define asset scope',
 render(){
- const rows=DB.projects.slice().reverse().map(p=>{
+ const rows=(Array.isArray(DB.projects)?DB.projects:[]).slice().reverse().map(p=>{
   const st=projectStats(p);
   return `<tr>
    <td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
@@ -1412,7 +1475,7 @@ render(){
    <td>${esc(p.mode)}</td>
    <td>${esc(p.start)}<div class="muted" style="font-size:11px">due ${esc(p.due)}</div></td>
    <td>${badge(p.status)}</td>
-   <td>${p.team.map(t=>'<span class="tag">'+esc(userName(t))+'</span>').join('')||'<span class="muted">unassigned</span>'}</td>
+   <td>${((p.team)||[]).map(t=>'<span class="tag">'+esc(userName(t))+'</span>').join('')||'<span class="muted">unassigned</span>'}</td>
    <td style="min-width:140px"><div class="progressbar"><div style="width:${st.pct}%"></div></div>
      <span class="muted" style="font-size:11px">${st.tested}/${st.expected||st.all} tested · ${st.verified} verified</span></td>
    <td class="flex">
@@ -1425,7 +1488,7 @@ render(){
   <div class="kpi teal"><div class="lbl">Active projects</div><div class="val">${DB.projects.filter(p=>p.status==='Active').length}</div></div>
   <div class="kpi blue"><div class="lbl">Planned</div><div class="val">${DB.projects.filter(p=>p.status==='Planned').length}</div></div>
   <div class="kpi green"><div class="lbl">Completed</div><div class="val">${DB.projects.filter(p=>p.status==='Completed').length}</div></div>
-  <div class="kpi purple"><div class="lbl">Engineers deployed</div><div class="val">${new Set(DB.projects.filter(p=>p.status==='Active').flatMap(p=>p.team)).size}</div></div>
+  <div class="kpi purple"><div class="lbl">Engineers deployed</div><div class="val">${new Set(DB.projects.filter(p=>p.status==='Active').flatMap(p=>p.team||[])).size}</div></div>
  </div>
  <div class="card"><div class="card-h"><h3>All projects</h3>
   <button class="btn btn-p btn-sm" onclick="editProject()">+ New project</button></div>
@@ -1436,7 +1499,7 @@ function projectDetail(){
  const p=PROJ_OPEN?projectById(PROJ_OPEN):null;
  if(!p)return '<div class="info">Select <b>Open</b> on a project to see its scope, team and live testing status.</div>';
  const st=projectStats(p);
- const all=DB.assets.filter(a=>a.projectId===p.id);
+ const all=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===p.id);
  const scopeRows=p.scope.map(s=>{
   const got=all.filter(a=>a.category===s.category);
   const tested=got.filter(a=>['Tested','Verified'].includes(a.status)).length;
@@ -1935,6 +1998,7 @@ render(){
    <span class="muted" style="font-size:12px">Projects remain here until every asset is verified and the project is marked completed</span></div>
   <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client</th><th>Due</th><th>Captured</th><th>Testing progress</th><th>Rejected</th><th>Status</th></tr></thead>
   <tbody>${prows||'<tr><td colspan=7 class=muted>No open projects.</td></tr>'}</tbody></table></div></div>
+ ${admin?'<div class="info">Open <span class="linklike" onclick="show(\'projects\')">Projects</span> to create a job, <span class="linklike" onclick="show(\'register\')">Asset Register</span> for the live list, or <span class="linklike" onclick="show(\'testing\')">Scan &amp; Test</span> to capture devices. Sidebar modules stay available after sign-in.</div>':''}
  <div class="grid2">
   <div class="card"><div class="card-h"><h3>Status mix</h3></div><div class="card-b"><div class="chartbox"><canvas id="chStatus"></canvas></div></div></div>
   <div class="card"><div class="card-h"><h3>Grade distribution</h3></div><div class="card-b"><div class="chartbox"><canvas id="chGrade"></canvas></div></div></div>
@@ -1976,7 +2040,7 @@ after(){
    ============================================================ */
 VIEWS.reports={title:'Reports',crumb:'Export registers, project summaries and compliance evidence',
 render(){
- const rows=DB.projects.map(p=>{
+ const rows=(Array.isArray(DB.projects)?DB.projects:[]).map(p=>{
   const st=projectStats(p);
   return `<tr><td><b>${esc(p.id)}</b><div class="muted" style="font-size:11px">${esc(p.name)}</div></td>
    <td>${esc(clientName(p.clientId))}</td><td>${badge(p.status)}</td>
@@ -2053,7 +2117,7 @@ function exportEngineerCSV(){
   const rej=mine.filter(a=>a.status==='Rejected');
   return [u.name,u.email,mine.length,done.length,mine.filter(a=>a.status==='Verified').length,rej.length,
    done.length?Math.round((done.length-rej.length)/done.length*100)+'%':'—',
-   DB.projects.filter(p=>p.team.includes(u.id)).map(p=>p.id).join('; ')];
+   DB.projects.filter(p=>((p.team)||[]).includes(u.id)).map(p=>p.id).join('; ')];
  });
  csvDownload('engineer_productivity_'+today()+'.csv',
   toCSV(['Engineer','Email','Assets Captured','Tests Submitted','Verified','Rejected','First-Pass Rate','Projects'],rows));
@@ -2061,7 +2125,7 @@ function exportEngineerCSV(){
 }
 function projectSummary(pid){
  const p=projectById(pid);const st=projectStats(p);
- const all=DB.assets.filter(a=>a.projectId===pid);
+ const all=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===pid);
  const gr={A:0,B:0,C:0,D:0};all.forEach(a=>{if(a.grade&&a.status!=='Registered')gr[a.grade]++;});
  const laps=all.filter(a=>isBlanccoCat(a.category));
  const mf=DB.manifests.filter(m=>m.projectId===pid).slice(-1)[0];
@@ -2189,7 +2253,7 @@ function addCategory(){
 }
 function delCategory(c){
  if(DB.assets.some(a=>a.category===c)){toast('Cannot remove '+c+' — assets of this category exist');return;}
- if(DB.projects.some(p=>p.scope.some(s=>s.category===c))){toast('Cannot remove '+c+' — it is in a project scope');return;}
+ if(DB.projects.some(p=>((p.scope)||[]).some(s=>s.category===c))){toast('Cannot remove '+c+' — it is in a project scope');return;}
  DB.categories=DB.categories.filter(x=>x!==c);delete DB.testParams[c];delete DB.specFields[c];
  rerender();toast(c+' removed');
 }
@@ -2259,7 +2323,7 @@ render(){
   const caps=DB.assets.filter(a=>a.testedBy===u.id).length;
   return `<tr><td><b>${esc(u.name)}</b><div class="muted" style="font-size:11px">${esc(u.email)}</div></td>
    <td>${badge(u.role)}</td><td>${esc(u.phone||'—')}</td>
-   <td>${DB.projects.filter(p=>p.team.includes(u.id)||p.managerId===u.id).map(p=>'<span class="tag">'+esc(p.id)+'</span>').join('')||'<span class="muted">—</span>'}</td>
+   <td>${DB.projects.filter(p=>((p.team)||[]).includes(u.id)||p.managerId===u.id).map(p=>'<span class="tag">'+esc(p.id)+'</span>').join('')||'<span class="muted">—</span>'}</td>
    <td>${caps}</td>
    <td>${u.active?badge('Verified').replace('Verified','Active'):badge('Rejected').replace('Rejected','Disabled')}</td>
    <td class="flex"><button class="btn btn-sm" onclick="editUser('${u.id}')">Edit</button>
@@ -2410,7 +2474,7 @@ document.addEventListener('click',e=>{
  if(act==='setTest')setTest(btn.getAttribute('data-key'),btn.getAttribute('data-val'));
 });
 </script>
-<script src="/static/qrcode.min.js?v=prod4"></script>
-<script src="/static/persist.js?v=prod4"></script>
+<script src="/static/qrcode.min.js?v=prod6"></script>
+<script src="/static/persist.js?v=prod6"></script>
 </body>
 </html>
