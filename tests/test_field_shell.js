@@ -4,8 +4,10 @@ const fs = require("fs");
 const path = require("path");
 const htmlPath = path.join(__dirname, "..", "static", "index.html");
 const persistPath = path.join(__dirname, "..", "static", "persist.js");
+const fieldPath = path.join(__dirname, "..", "static", "field.js");
 const html = fs.readFileSync(htmlPath, "utf8");
 const persist = fs.readFileSync(persistPath, "utf8");
+const field = fs.readFileSync(fieldPath, "utf8");
 
 function assert(cond, msg) {
   if (!cond) {
@@ -14,10 +16,12 @@ function assert(cond, msg) {
   }
 }
 
-assert(html.includes("function enterField("), "enterField in index");
-assert(html.includes("function leaveField("), "leaveField in index");
-assert(html.includes("function paintNav("), "paintNav in index");
-assert(html.includes("persist.js?v=prod7"), "prod7 cache bust");
+assert(field.includes("data-act=\"addUser\""), "Add user action");
+assert(!field.includes("New users cannot be added"), "create users enabled");
+assert(field.includes("function leaveField("), "leaveField in field.js");
+assert(field.includes("function paintNav("), "paintNav in field.js");
+assert(html.includes("field.js?v=prod10"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod10"), "prod10 cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
@@ -132,10 +136,8 @@ const windowRef = {
   addEventListener() {},
 };
 
-// Extract the inline script (first big app script, not persist).
-const scripts = html.split("<script").slice(1).map((s) => s.slice(s.indexOf(">") + 1).split("</script>")[0]);
-const appScript = scripts.find((s) => s.includes("const DB=") && s.includes("function enterField"));
-assert(appScript, "inline Field script");
+const appScript = field;
+assert(appScript.includes("const DB="), "Field data model");
 
 const vm = require("vm");
 windowRef.document = documentRef;

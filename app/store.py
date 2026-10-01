@@ -10,7 +10,17 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.accounts import ALLOWED_USERS, account_for_id, public_user
+from app.accounts import (
+    ADMIN_ID,
+    ALLOWED_USERS,
+    SEED_USER_IDS,
+    account_for_email,
+    account_for_id,
+    is_seed_user,
+    normalize_email,
+    public_user,
+    valid_login_email,
+)
 from app.audit import append_audit
 from app.config import (
     BLANCCO_API_KEY,
@@ -487,7 +497,9 @@ def upsert_project(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
         existing = _find(state.get("projects") or [], pid) or {}
         row = dict(existing)
         team = payload.get("team") if isinstance(payload.get("team"), list) else existing.get("team") or []
-        team = [str(t) for t in team if str(t) in {u["id"] for u in ALLOWED_USERS.values()}]
+        known_ids = {str(u.get("id")) for u in (state.get("users") or []) if isinstance(u, dict) and u.get("id")}
+        known_ids.update(row["id"] for row in ALLOWED_USERS.values())
+        team = [str(t) for t in team if str(t) in known_ids]
         row.update(
             {
                 "id": pid,
@@ -572,34 +584,170 @@ def upsert_config(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, An
     }
 
 
+def _canon_register_user(row: dict[str, Any]) -> dict[str, Any] | None:
+    uid = str(row.get("id") or "").strip()
+    email = valid_login_email(row.get("email"))
+    if not uid or not email:
+        return None
+    role = row.get("role") if row.get("role") in ROLES else "Field Engineer"
+    return {
+        "id": uid,
+        "name": str(row.get("name") or email.split("@")[0])[:80],
+        "email": email,
+        "role": role,
+        "phone": str(row.get("phone") or "")[:40],
+        "active": bool(row.get("active", True)),
+    }
+
+
+def _overlay_seed(state: dict[str, Any], seed: dict[str, Any]) -> dict[str, Any]:
+    row = dict(seed)
+    overlay = None
+    for person in state.get("users") or []:
+        if not isinstance(person, dict):
+            continue
+        if person.get("id") == seed["id"] or normalize_email(person.get("email")) == normalize_email(seed["email"]):
+            overlay = person
+            break
+    if overlay:
+        if overlay.get("name"):
+            row["name"] = str(overlay.get("name") or row["name"])[:80]
+        row["phone"] = str(overlay.get("phone") or "")[:40]
+        if seed["id"] != ADMIN_ID and "active" in overlay:
+            row["active"] = bool(overlay.get("active", True))
+    if seed["id"] == ADMIN_ID:
+        row["active"] = True
+    row["id"] = seed["id"]
+    row["email"] = seed["email"]
+    row["role"] = seed["role"]
+    return row
+
+
+def account_from_state(
+    state: dict[str, Any] | None, *, email: str | None = None, user_id: str | None = None
+) -> dict[str, Any] | None:
+    state = state or empty_production_state()
+    addr = normalize_email(email)
+    seed = account_for_email(addr) if addr else account_for_id(user_id)
+    if seed:
+        return _overlay_seed(state, seed)
+    for person in state.get("users") or []:
+        if not isinstance(person, dict):
+            continue
+        if addr and normalize_email(person.get("email")) == addr:
+            return _canon_register_user(person)
+        if user_id and str(person.get("id") or "") == str(user_id):
+            return _canon_register_user(person)
+    if user_id:
+        seed = account_for_id(user_id)
+        if seed:
+            return _overlay_seed(state, seed)
+    return None
+
+
+def resolve_account(*, email: str | None = None, user_id: str | None = None) -> dict[str, Any] | None:
+    with _lock:
+        state = _read_unlocked()
+    return account_from_state(state, email=email, user_id=user_id)
+
+
+def _alloc_user_id(state: dict[str, Any], seq: dict[str, Any]) -> str:
+    existing = {str(u.get("id")) for u in (state.get("users") or []) if isinstance(u, dict)}
+    existing.update(SEED_USER_IDS)
+    for _ in range(500):
+        uid = _next_id(seq, "user", "U-", 1)
+        if uid not in existing:
+            return uid
+    raise HTTPException(status_code=500, detail="Could not allocate a user id.")
+
+
 def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     if user.get("role") != "Super Admin":
         raise HTTPException(status_code=403, detail="Super Admin only.")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="User must be JSON.")
     uid = str(payload.get("id") or "").strip()
-    account = account_for_id(uid)
-    if not account:
-        raise HTTPException(status_code=400, detail="Only the two production accounts exist.")
     with _lock:
         state = _read_unlocked() or empty_production_state()
-        existing = _find(state.get("users") or [], uid) or dict(account)
-        name = str(payload.get("name") or existing.get("name") or account["name"])[:80]
-        phone = str(payload.get("phone") if payload.get("phone") is not None else existing.get("phone") or "")[:40]
-        active = existing.get("active", True)
-        if "active" in payload and uid != user.get("id"):
-            active = bool(payload["active"])
-        row = {
-            **existing,
-            **account,
-            "name": name,
-            "phone": phone,
-            "active": active,
-            "email": account["email"],
-            "role": account["role"],
-            "id": uid,
-        }
+        seq = dict(state.get("seq") or {})
+        existing = _find(state.get("users") or [], uid) if uid else None
+        creating = existing is None and not uid
+        if uid and existing is None and not is_seed_user(uid):
+            raise HTTPException(status_code=404, detail="User not found.")
+        seed = account_for_id(uid) if uid else None
+        if creating:
+            name = str(payload.get("name") or "").strip()
+            email = valid_login_email(payload.get("email"))
+            if not name:
+                raise HTTPException(status_code=400, detail="Name is required.")
+            if not email:
+                raise HTTPException(status_code=400, detail="Enter a valid work email.")
+            for person in state.get("users") or []:
+                if isinstance(person, dict) and normalize_email(person.get("email")) == email:
+                    raise HTTPException(status_code=409, detail="That email already has an account.")
+            if account_for_email(email):
+                raise HTTPException(status_code=409, detail="That email already has an account.")
+            role = payload.get("role") if payload.get("role") in ROLES else "Field Engineer"
+            uid = _alloc_user_id(state, seq)
+            row = {
+                "id": uid,
+                "name": name[:80],
+                "email": email,
+                "role": role,
+                "phone": str(payload.get("phone") or "")[:40],
+                "active": True if "active" not in payload else bool(payload.get("active")),
+            }
+            action = "user.create"
+        else:
+            account = seed or existing or {}
+            name = str(payload.get("name") or account.get("name") or "")[:80]
+            if not name:
+                raise HTTPException(status_code=400, detail="Name is required.")
+            phone = str(payload.get("phone") if payload.get("phone") is not None else account.get("phone") or "")[:40]
+            active = bool(account.get("active", True))
+            if "active" in payload and uid != user.get("id") and uid != ADMIN_ID:
+                active = bool(payload["active"])
+            if uid == ADMIN_ID:
+                active = True
+            if seed:
+                row = {
+                    **(existing or {}),
+                    **seed,
+                    "name": name,
+                    "phone": phone,
+                    "active": active,
+                    "email": seed["email"],
+                    "role": seed["role"],
+                    "id": uid,
+                }
+            else:
+                email = valid_login_email(payload.get("email") or account.get("email"))
+                if not email:
+                    raise HTTPException(status_code=400, detail="Enter a valid work email.")
+                for person in state.get("users") or []:
+                    if not isinstance(person, dict):
+                        continue
+                    if person.get("id") == uid:
+                        continue
+                    if normalize_email(person.get("email")) == email:
+                        raise HTTPException(status_code=409, detail="That email already has an account.")
+                role = payload.get("role") if payload.get("role") in ROLES else account.get("role") or "Field Engineer"
+                if role not in ROLES:
+                    role = "Field Engineer"
+                row = {
+                    **(existing or {}),
+                    "id": uid,
+                    "name": name,
+                    "email": email,
+                    "role": role,
+                    "phone": phone,
+                    "active": active,
+                }
+            action = "user.update"
         state["users"] = _replace(state.get("users") or [], row)
+        state["seq"] = seq
         saved = _write_unlocked(state)
-    append_audit(user, "user.update", "user", uid, name)
+    append_audit(user, action, "user", uid, row.get("name") or "")
     return public_user(row) | {"_rev": saved["_rev"]}
 
 
@@ -753,19 +901,34 @@ def cutover_if_needed() -> dict[str, Any]:
         with _lock:
             current = _read_unlocked() or empty_production_state()
             changed = False
-            users = []
-            allowed_ids = {u["id"] for u in ALLOWED_USERS.values()}
-            by_id = {u["id"]: copy.deepcopy(u) for u in ALLOWED_USERS.values()}
+            users: list[dict[str, Any]] = []
+            seen_ids: set[str] = set()
+            seen_emails: set[str] = set()
+            seed_by_id = {u["id"]: copy.deepcopy(u) for u in ALLOWED_USERS.values()}
             for row in current.get("users") or []:
-                if isinstance(row, dict) and row.get("id") in allowed_ids:
-                    base = by_id[row["id"]]
+                if not isinstance(row, dict) or not row.get("id"):
+                    continue
+                uid = str(row["id"])
+                email = normalize_email(row.get("email"))
+                if uid in seed_by_id:
+                    base = seed_by_id.pop(uid)
                     base["name"] = row.get("name") or base["name"]
                     base["phone"] = row.get("phone") or ""
-                    base["active"] = row.get("active", True)
+                    base["active"] = True if uid == ADMIN_ID else row.get("active", True)
                     users.append(base)
-                    del by_id[row["id"]]
-            users.extend(by_id.values())
-            if [u["id"] for u in users] != [u.get("id") for u in (current.get("users") or [])]:
+                    seen_ids.add(uid)
+                    seen_emails.add(normalize_email(base["email"]))
+                    continue
+                canon = _canon_register_user(row)
+                if not canon or canon["id"] in seen_ids or canon["email"] in seen_emails:
+                    continue
+                if canon["email"] in ALLOWED_USERS:
+                    continue
+                users.append(canon)
+                seen_ids.add(canon["id"])
+                seen_emails.add(canon["email"])
+            users.extend(seed_by_id.values())
+            if [u.get("id") for u in users] != [u.get("id") for u in (current.get("users") or [])]:
                 current["users"] = users
                 changed = True
             cleaned_assets = []

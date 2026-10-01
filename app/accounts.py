@@ -1,9 +1,12 @@
-"""Production accounts. Roles are server-side; the browser cannot pick them."""
+"""Seed accounts. Super Admin can add more users on the register."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
-# Login is restricted to these two emails. Roles are not client-controlled.
+EMAIL_RE = re.compile(r"^[^@\s]{1,80}@[^@\s]{1,80}\.[^@\s]{1,24}$")
+
+# Built-in accounts always exist. Super Admin may add more from Users.
 ALLOWED_USERS: dict[str, dict[str, Any]] = {
     "manish@urbeno.in": {
         "id": "U-1",
@@ -24,12 +27,27 @@ ALLOWED_USERS: dict[str, dict[str, Any]] = {
 }
 
 ALLOWED_EMAILS = frozenset(ALLOWED_USERS)
+SEED_USER_IDS = frozenset(row["id"] for row in ALLOWED_USERS.values())
 ADMIN_EMAIL = "manish@urbeno.in"
 FIELD_EMAIL = "darshak@urbeno.in"
+ADMIN_ID = "U-1"
 
 
 def normalize_email(value: str | None) -> str:
     return str(value or "").strip().lower()
+
+
+def valid_login_email(value: str | None) -> str:
+    addr = normalize_email(value)
+    if not addr or not EMAIL_RE.match(addr) or len(addr) > 120:
+        return ""
+    return addr
+
+
+def is_seed_user(user_id: str | None = None, email: str | None = None) -> bool:
+    if user_id and str(user_id) in SEED_USER_IDS:
+        return True
+    return normalize_email(email) in ALLOWED_USERS
 
 
 def account_for_email(email: str | None) -> dict[str, Any] | None:

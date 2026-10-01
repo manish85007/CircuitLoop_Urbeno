@@ -360,12 +360,22 @@ def update_config(request: Request, payload: dict[str, Any]) -> JSONResponse:
     return api_json(upsert_config(user, payload))
 
 
+@app.post("/api/users")
+def create_user(request: Request, payload: dict[str, Any]) -> JSONResponse:
+    user = require_admin(request)
+    created = upsert_user_profile(user, dict(payload or {}))
+    state = load_state() or empty_production_state()
+    return api_json({"user": created, "state": filter_state_for_user(state, user)})
+
+
 @app.put("/api/users/{user_id}")
 def update_user(user_id: str, request: Request, payload: dict[str, Any]) -> JSONResponse:
     user = require_user(request)
     payload = dict(payload)
     payload["id"] = user_id
-    return api_json({"user": upsert_user_profile(user, payload)})
+    saved = upsert_user_profile(user, payload)
+    state = load_state() or empty_production_state()
+    return api_json({"user": saved, "state": filter_state_for_user(state, user)})
 
 
 @app.post("/api/manifests")
@@ -411,6 +421,11 @@ async def validation_error(_: Request, exc: RequestValidationError) -> JSONRespo
 @app.get("/openapi.json")
 def closed_docs() -> JSONResponse:
     return api_json({"error": "Not found."}, 404)
+
+
+@app.get("/static/field.js")
+def field_js() -> FileResponse:
+    return FileResponse(STATIC_DIR / "field.js", media_type="text/javascript", headers=NO_STORE)
 
 
 @app.get("/static/persist.js")

@@ -6,14 +6,14 @@ Production: https://loop.urbeno.in
 
 ## Sign in (production)
 
-Login is restricted to:
+Built-in accounts:
 
 | Email | Role |
 | --- | --- |
 | **manish@urbeno.in** | Super Admin |
-| **darshak@urbeno.in** | User / Field Engineer |
+| **darshak@urbeno.in** | Field Engineer |
 
-Roles are assigned on the server. There is no click-a-name login.
+A Super Admin can add more people from **Users → Add user**. New accounts sign in with that email and enroll an authenticator on first visit. Roles are assigned on the server. There is no click-a-name login and no password store.
 
 ### First-time authenticator (TOTP) enroll
 
@@ -25,7 +25,7 @@ SMTP is optional. If no email API is configured, authenticator is the working fa
    - Scan the QR code, or copy the secret / `otpauth://` URL.
    - Keep a single CircuitLoop entry. Each extra entry from an earlier try will not match.
 4. Enter the 6-digit code to confirm. That binds the authenticator to your account.
-5. After a successful code, Field must show the sidebar modules (Dashboard, Scan & Test, Projects, Asset Register, …) and Sign out must return to the email card. Hard-refresh once after a deploy so `persist.js?v=prod6` loads.
+5. After a successful code, Field must show the sidebar modules (Dashboard, Scan & Test, Projects, Asset Register, Users, …) and Sign out must return to the email card. Hard-refresh once after a deploy so `persist.js?v=prod10` loads.
 
 If a code does not match, use **Set up a new authenticator QR**, delete the old CircuitLoop entry in the app, and scan the new code. The previous secret stays valid until the new one is confirmed.
 

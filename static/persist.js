@@ -671,6 +671,8 @@
     soon: persistSoon,
     api: api,
     showAuth: showAuth,
+    hydrate: hydrateFromServer,
+    applyState: applyState,
   };
 
   async function bootFromServer() {
@@ -703,6 +705,21 @@
     }
     openFieldApp(user);
     ready = true;
+    function paintLive(tries) {
+      const dest = user.role === "Field Engineer" ? "testing" : "dashboard";
+      if (typeof show !== "function") {
+        if (tries > 0) setTimeout(function () { paintLive(tries - 1); }, 40);
+        return;
+      }
+      try {
+        show(dest);
+      } catch (err) {}
+      const content = document.getElementById("content");
+      const html = content ? String(content.innerHTML || "") : "";
+      const dummy = /Live counts load/.test(html) || /Use the sidebar for Dashboard/.test(html);
+      if (dummy && tries > 0) setTimeout(function () { paintLive(tries - 1); }, 40);
+    }
+    paintLive(50);
   }
 
   bootFromServer();

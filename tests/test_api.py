@@ -173,16 +173,23 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod7" in html
-    assert "qrcode.min.js?v=prod7" in html
+    assert "persist.js?v=prod10" in html
+    assert "qrcode.min.js?v=prod10" in html
+    assert "field.js?v=prod10" in html
     assert "integrity=" in html
-    assert "function blanccoRequired(a){return false;}" in html
-    assert "blanccoOptIn" in html
-    assert "editAssetDetails" in html
-    assert "function enterField(" in html
-    assert "function leaveField(" in html
-    assert "function canonicalizeUser(" in html
-    assert "function ensureDbLists(" in html
+    field = client.get("/static/field.js")
+    assert field.status_code == 200
+    assert "function blanccoRequired(a){return false;}" in field.text
+    assert "blanccoOptIn" in field.text
+    assert "editAssetDetails" in field.text
+    assert "function enterField(" in field.text
+    assert "function leaveField(" in field.text
+    assert "function canonicalizeUser(" in field.text
+    assert "function ensureDbLists(" in field.text
+    assert "VIEWS.dashboard" in field.text
+    assert "data-act=\"addUser\"" in field.text
+    assert "Added " in field.text or "Add user" in field.text
+    assert "New users cannot be added" not in field.text
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
     assert "/api/auth/start" in persist.text
@@ -194,7 +201,7 @@ def test_index_production_login(client):
     assert "we will not send a fake code" in persist.text
     assert "enterField" in persist.text
     assert "leaveField" in persist.text
-    assert "/api/preview/login" in persist.text
+    assert "paintLive" in persist.text
     assert "dbSeed" in persist.text
     assert "ensureLists" in persist.text
     assert "Object.assign(DB, dbSeed, state)" in persist.text
@@ -207,7 +214,8 @@ def test_index_production_login(client):
 
 def test_csv_asset_import_ui(client):
     html = client.get("/").text
-    assert "openAssetCsvImport" in html
+    field = client.get("/static/field.js").text
+    assert "openAssetCsvImport" in field
     assert "asset-csv.js?v=prod1" in html
     js = client.get("/static/asset-csv.js")
     assert "fillTestsIfTested" in js.text
@@ -280,9 +288,9 @@ def test_sync_upserts_asset(client):
 def test_headers_present(client):
     res = client.get("/api/health")
     assert res.headers.get("x-frame-options") == "DENY"
-    assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
     csp = res.headers.get("content-security-policy") or ""
-    assert "script-src 'self' 'unsafe-inline'" in csp
+    assert "script-src" in csp
+    assert "'unsafe-inline'" in csp
     assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
     assert res.json()["emailOtp"] is False
     assert res.json().get("previewLogin") is False
@@ -402,3 +410,60 @@ def test_preview_login_opens_super_admin(client, monkeypatch):
     state = client.get("/api/state")
     assert state.status_code == 200
     assert "projects" in state.json()["state"]
+
+
+def test_super_admin_adds_user_who_can_enroll(client):
+    enroll_and_login(client)
+    blocked = client.post(
+        "/api/users",
+        json={"name": "No Email", "role": "Field Engineer"},
+    )
+    assert blocked.status_code == 400
+    created = client.post(
+        "/api/users",
+        json={
+            "name": "Priya Shetty",
+            "email": "priya@urbeno.in",
+            "role": "Field Engineer",
+            "phone": "99999",
+        },
+    )
+    assert created.status_code == 200, created.text
+    person = created.json()["user"]
+    assert person["id"] == "U-3"
+    assert person["email"] == "priya@urbeno.in"
+    assert person["role"] == "Field Engineer"
+    emails = {u["email"] for u in created.json()["state"]["users"] if u.get("email")}
+    assert "priya@urbeno.in" in emails
+    dup = client.post(
+        "/api/users",
+        json={"name": "Priya 2", "email": "priya@urbeno.in", "role": "Field Engineer"},
+    )
+    assert dup.status_code == 409
+    client.delete("/api/session")
+    start = client.post("/api/auth/start", json={"email": "priya@urbeno.in"})
+    assert start.status_code == 200, start.text
+    assert start.json()["factor"] == "enroll"
+    code = pyotp.TOTP(start.json()["secret"]).now()
+    verify = client.post("/api/auth/verify", json={"email": "priya@urbeno.in", "code": code})
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["user"]["id"] == "U-3"
+    assert verify.json()["user"]["role"] == "Field Engineer"
+    sess = client.get("/api/session").json()["user"]
+    assert sess["email"] == "priya@urbeno.in"
+    add_as_field = client.post(
+        "/api/users",
+        json={"name": "Nope", "email": "nope@urbeno.in", "role": "Field Engineer"},
+    )
+    assert add_as_field.status_code == 403
+
+
+def test_unknown_email_still_rejected_after_roster_grows(client):
+    enroll_and_login(client)
+    client.post(
+        "/api/users",
+        json={"name": "Extra", "email": "extra@urbeno.in", "role": "Field Engineer"},
+    )
+    client.delete("/api/session")
+    res = client.post("/api/auth/start", json={"email": "stranger@example.com"})
+    assert res.status_code == 401

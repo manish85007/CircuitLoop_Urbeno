@@ -1,4 +1,4 @@
-"""Email OTP + TOTP sessions. Roles come from ALLOWED_USERS, never the client."""
+"""Email OTP + TOTP sessions. Roles come from seed accounts or the live register."""
 from __future__ import annotations
 
 import errno
@@ -214,6 +214,12 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(COOKIE_NAME, path="/")
 
 
+def _resolve_login_account(email: str | None = None, user_id: str | None = None) -> dict[str, Any] | None:
+    from app.store import resolve_account
+
+    return resolve_account(email=email, user_id=user_id)
+
+
 def read_session(request: Request) -> dict | None:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -223,10 +229,10 @@ def read_session(request: Request) -> dict | None:
     except (BadSignature, SignatureExpired):
         return None
     email = normalize_email(payload.get("email"))
-    account = account_for_email(email) or account_for_id(payload.get("userId"))
-    if not account:
+    account = _resolve_login_account(email=email, user_id=payload.get("userId"))
+    if not account or account.get("active") is False:
         return None
-    # Roles are always taken from the allow-list, never from the cookie.
+    # Roles come from the seed list or the live register, never from the cookie.
     return {
         "userId": account["id"],
         "id": account["id"],
@@ -371,9 +377,9 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
     start_limit, _ = _rate_limits(addr)
     if not _rate_ok("start:" + addr, start_limit, RATE_WINDOW_SEC):
         raise HTTPException(status_code=429, detail="Too many sign-in attempts. Try again later.")
-    account = account_for_email(addr)
-    if account is None:
-        # Same wording so the allow-list is not enumerable by timing of a distinct error.
+    account = _resolve_login_account(email=addr)
+    if account is None or account.get("active") is False:
+        # Same wording so the roster is not enumerable by timing of a distinct error.
         raise HTTPException(status_code=401, detail="That account cannot sign in.")
 
     choice = _normalize_method(method)
@@ -454,8 +460,8 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
     _, verify_limit = _rate_limits(addr)
     if not _rate_ok("verify:" + addr, verify_limit, RATE_WINDOW_SEC):
         raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-    account = account_for_email(addr)
-    if account is None:
+    account = _resolve_login_account(email=addr)
+    if account is None or account.get("active") is False:
         raise HTTPException(status_code=401, detail="That account cannot sign in.")
     token = str(code or "").strip().replace(" ", "")
     if not token.isdigit() or len(token) != 6:
