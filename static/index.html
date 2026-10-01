@@ -594,20 +594,35 @@ function renderLogin(){
  if(window.CircuitLoopPersist&&CircuitLoopPersist.showAuth)CircuitLoopPersist.showAuth();
 }
 function login(uid, fallback){
- ME=DB.users.find(u=>u.id===uid);
- if(!ME && fallback && (fallback.id===uid || fallback.userId===uid)){
-  ME={id:fallback.id||uid,name:fallback.name||'',email:fallback.email||'',role:fallback.role||'Field Engineer',active:true,phone:fallback.phone||''};
-  if(!DB.users.some(u=>u.id===ME.id)) DB.users.push(Object.assign({},ME));
+ const row = fallback && typeof fallback === "object" ? fallback : null;
+ const id = (row && (row.id || row.userId)) || uid;
+ ME = (DB.users || []).find(u => u && u.id === id) || null;
+ if (!ME && row) {
+  ME = {
+   id: id,
+   name: row.name || "",
+   email: row.email || "",
+   role: row.role || "Field Engineer",
+   active: row.active !== false,
+   phone: row.phone || ""
+  };
  }
- if(!ME){toast('Signed-in account is not in this register');return;}
+ if (!ME && id) {
+  ME = {id: id, name: "", email: "", role: "Field Engineer", active: true, phone: ""};
+ }
+ if (!ME) { toast("Signed-in account is not in this register"); return; }
+ if (!(DB.users || []).some(u => u && u.id === ME.id)) {
+  if (!Array.isArray(DB.users)) DB.users = [];
+  DB.users.push(Object.assign({}, ME));
+ }
  $('#loginview').classList.add('hide');
  $('#appview').classList.remove('hide');
- $('#whoami').textContent=ME.name+' · '+ME.role;
- $('#whoavatar').textContent=ME.name.split(' ').map(x=>x[0]).join('').slice(0,2);
+ $('#whoami').textContent = ME.name + ' · ' + ME.role;
+ $('#whoavatar').textContent = (ME.name || 'U').split(' ').map(x => x[0]).join('').slice(0, 2) || 'U';
  buildNav();
  $('#fab').classList.remove('hide');
- show(ME.role==='Field Engineer'?'testing':'dashboard');
- toast('Signed in as '+ME.name+' ('+ME.role+')');
+ show(ME.role === 'Field Engineer' ? 'testing' : 'dashboard');
+ toast('Signed in as ' + ME.name + ' (' + ME.role + ')');
 }
 function logout(){
  stopScanner();
@@ -2395,7 +2410,7 @@ document.addEventListener('click',e=>{
  if(act==='setTest')setTest(btn.getAttribute('data-key'),btn.getAttribute('data-val'));
 });
 </script>
-<script src="/static/qrcode.min.js?v=prod3"></script>
-<script src="/static/persist.js?v=prod3"></script>
+<script src="/static/qrcode.min.js?v=prod4"></script>
+<script src="/static/persist.js?v=prod4"></script>
 </body>
 </html>

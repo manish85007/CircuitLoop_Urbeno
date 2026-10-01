@@ -1,9 +1,12 @@
 """Email OTP + TOTP sessions. Roles come from ALLOWED_USERS, never the client."""
 from __future__ import annotations
 
+import errno
 import json
 import secrets
 import smtplib
+import socket
+import ssl
 import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -256,6 +259,66 @@ def _sanitize_smtp_error(exc: BaseException) -> str:
     return text.replace("\n", " ")[:220]
 
 
+def _ipv4_socket(host: str, port: int, timeout: float) -> socket.socket:
+    last: OSError | None = None
+    try:
+        infos = socket.getaddrinfo(host, int(port), socket.AF_INET, socket.SOCK_STREAM)
+    except OSError as exc:
+        raise OSError(f"SMTP IPv4 lookup failed for {host}:{port}") from exc
+    for family, socktype, proto, _, sockaddr in infos:
+        sock = socket.socket(family, socktype, proto)
+        sock.settimeout(timeout)
+        try:
+            sock.connect(sockaddr)
+            return sock
+        except OSError as exc:
+            last = exc
+            sock.close()
+    raise OSError(f"SMTP IPv4 unreachable ({host}:{port})") from last
+
+
+class _IPv4SMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        return _ipv4_socket(host, port, timeout)
+
+
+class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        raw = _ipv4_socket(host, port, timeout)
+        context = getattr(self, "context", None) or ssl.create_default_context()
+        return context.wrap_socket(raw, server_hostname=host)
+
+
+def _smtp_network_blocked(exc: BaseException) -> bool:
+    if isinstance(exc, TimeoutError):
+        return True
+    if isinstance(exc, OSError):
+        if getattr(exc, "errno", None) in {
+            errno.ENETUNREACH,
+            errno.EHOSTUNREACH,
+            errno.ECONNREFUSED,
+            errno.ETIMEDOUT,
+            101,
+        }:
+            return True
+        text = str(exc).lower()
+        if "unreachable" in text or "timed out" in text or "network is unreachable" in text:
+            return True
+    return False
+
+
+def _send_via(cfg: dict[str, Any], msg: EmailMessage, port: int, use_ssl: bool, starttls: bool) -> None:
+    timeout = float(cfg.get("timeout") or 12)
+    host = cfg["host"]
+    cls = _IPv4SMTP_SSL if use_ssl else _IPv4SMTP
+    with cls(host, int(port), timeout=timeout) as smtp:
+        if starttls and not use_ssl:
+            smtp.starttls()
+        if cfg["user"]:
+            smtp.login(cfg["user"], cfg["password"])
+        smtp.send_message(msg)
+
+
 def _send_email(to_addr: str, subject: str, body: str) -> None:
     cfg = smtp_settings()
     if not cfg["host"]:
@@ -265,12 +328,31 @@ def _send_email(to_addr: str, subject: str, body: str) -> None:
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
-    with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as smtp:
-        if cfg["starttls"]:
-            smtp.starttls()
-        if cfg["user"]:
-            smtp.login(cfg["user"], cfg["password"])
-        smtp.send_message(msg)
+    attempts: list[tuple[int, bool, bool]] = []
+    port = int(cfg["port"] or 587)
+    use_ssl = bool(cfg.get("ssl") or port == 465)
+    starttls = bool(cfg.get("starttls")) and not use_ssl
+    attempts.append((port, use_ssl, starttls))
+    if port != 465:
+        attempts.append((465, True, False))
+    last: BaseException | None = None
+    for try_port, ssl_on, tls_on in attempts:
+        try:
+            _send_via(cfg, msg, try_port, ssl_on, tls_on)
+            return
+        except Exception as exc:
+            last = exc
+            if _smtp_network_blocked(exc):
+                continue
+            raise
+    assert last is not None
+    raise OSError(
+        "SMTP blocked from this host (IPv4 "
+        + cfg["host"]
+        + "). Tried port "
+        + str(port)
+        + " then 465 SSL. Use authenticator until outbound SMTP is allowed."
+    ) from last
 
 
 def _normalize_method(method: str) -> str:

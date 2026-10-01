@@ -453,7 +453,98 @@
     });
   }
 
+  function sessionUserFrom(payload) {
+    const raw = payload && (payload.user || payload);
+    if (!raw || typeof raw !== "object") return null;
+    const id = raw.id || raw.userId;
+    if (!id) return null;
+    return {
+      id: id,
+      userId: id,
+      name: raw.name || "",
+      email: raw.email || "",
+      role: raw.role || "Field Engineer",
+      phone: raw.phone || "",
+      active: raw.active !== false,
+    };
+  }
+
+  function ensureUserRow(user) {
+    if (typeof DB === "undefined") return;
+    if (!Array.isArray(DB.users)) DB.users = [];
+    let row = DB.users.find(function (u) {
+      return u && u.id === user.id;
+    });
+    if (!row) {
+      row = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone || "",
+        active: true,
+      };
+      DB.users.push(row);
+    } else {
+      if (user.name) row.name = user.name;
+      if (user.email) row.email = user.email;
+      if (user.role) row.role = user.role;
+    }
+  }
+
+  function openFieldApp(user) {
+    ensureUserRow(user);
+    const fn = window.login;
+    if (typeof fn === "function") {
+      try {
+        fn(user.id, user);
+      } catch (err) {}
+    }
+    try {
+      ME = user;
+    } catch (err) {}
+    const loginview = document.getElementById("loginview");
+    const appview = document.getElementById("appview");
+    if (loginview) loginview.classList.add("hide");
+    if (appview) appview.classList.remove("hide");
+    const who = document.getElementById("whoami");
+    if (who) who.textContent = (user.name || "") + " · " + (user.role || "");
+    const av = document.getElementById("whoavatar");
+    if (av) {
+      av.textContent =
+        String(user.name || "U")
+          .split(" ")
+          .map(function (p) {
+            return p.charAt(0);
+          })
+          .join("")
+          .slice(0, 2) || "U";
+    }
+    const fab = document.getElementById("fab");
+    if (fab) fab.classList.remove("hide");
+    if (typeof buildNav === "function") {
+      try {
+        buildNav();
+      } catch (err) {}
+    }
+    if (typeof show === "function") {
+      try {
+        show(user.role === "Field Engineer" ? "testing" : "dashboard");
+      } catch (err) {}
+    }
+  }
+
   async function afterSignIn(user, onError) {
+    let sessionUser = sessionUserFrom(user);
+    if (!sessionUser) {
+      try {
+        const sess = await api("GET", "/api/session");
+        sessionUser = sessionUserFrom(sess);
+      } catch (err) {}
+    }
+    if (!sessionUser) {
+      throw new Error("Sign-in succeeded but /api/session did not return your account. Refresh and try again.");
+    }
     let hydrateErr = null;
     try {
       const ok = await hydrateFromServer();
@@ -466,30 +557,27 @@
         "Signed in but the browser did not keep the session cookie. Allow cookies for this site, then try again."
       );
     }
-    if (typeof origLogin === "function" && user && user.id) {
-      origLogin(user.id, user);
-    } else {
-      throw new Error("Sign-in succeeded but the session user was missing.");
-    }
+    openFieldApp(sessionUser);
     const app = document.getElementById("appview");
     if (!app || app.classList.contains("hide")) {
-      const fail = hydrateErr || new Error("Signed in but the console did not open. Try again.");
+      const fail = new Error("Signed in but the console did not open. Refresh and try again.");
       if (typeof onError === "function") onError(fail.message);
-      else if (typeof toast === "function") toast(fail.message);
       throw fail;
     }
     ready = true;
     if (hydrateErr && typeof toast === "function") toast(hydrateErr.message);
   }
 
-  const origLogin = window.login;
-  window.login = function (uid) {
-    origLogin(uid);
+  const pageLogin = window.login;
+  window.login = function (uid, fallback) {
+    if (typeof pageLogin === "function") return pageLogin(uid, fallback);
+    const user = sessionUserFrom(fallback) || sessionUserFrom({ id: uid });
+    if (user) openFieldApp(user);
   };
 
   const origLogout = window.logout;
   window.logout = function () {
-    origLogout();
+    if (typeof origLogout === "function") origLogout();
     api("DELETE", "/api/session").catch(() => {});
     ready = false;
     showAuth();
@@ -498,7 +586,7 @@
   const origRerender = window.rerender;
   window.rerender = function () {
     persistSoon();
-    origRerender();
+    if (typeof origRerender === "function") origRerender();
   };
 
   if (window.BLANCCO && BLANCCO.fetchBySerial) {
@@ -551,10 +639,14 @@
       await hydrateFromServer();
     } catch (err) {
       if (typeof toast === "function") toast(err.message);
+    }
+    const user = sessionUserFrom(sessionUser);
+    if (!user) {
       showAuth();
+      ready = false;
       return;
     }
-    if (typeof origLogin === "function") origLogin(sessionUser.id, sessionUser);
+    openFieldApp(user);
     ready = true;
   }
 

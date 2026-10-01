@@ -171,8 +171,8 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod3" in html
-    assert "qrcode.min.js?v=prod3" in html
+    assert "persist.js?v=prod4" in html
+    assert "qrcode.min.js?v=prod4" in html
     assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
@@ -182,6 +182,8 @@ def test_index_production_login(client):
     assert "/api/auth/start" in persist.text
     assert "auth_qr" in persist.text
     assert "Email me a code" in persist.text
+    assert "openFieldApp" in persist.text
+    assert "sessionUserFrom" in persist.text
     assert "Signing in" in persist.text
     assert "we will not send a fake code" in persist.text
     assert 'method: "PUT"' not in persist.text
@@ -265,6 +267,29 @@ def test_health_email_otp_follows_env(client, monkeypatch):
 def test_verify_sets_session_cookie(client):
     enroll_and_login(client)
     assert client.cookies.get("circuitloop_session")
+
+
+def test_verify_and_session_return_super_admin(client):
+    user = enroll_and_login(client)
+    assert user["id"] == "U-1"
+    assert user["role"] == "Super Admin"
+    assert user["email"] == "manish@urbeno.in"
+    sess = client.get("/api/session").json()["user"]
+    assert sess["id"] == "U-1"
+    assert sess["email"] == "manish@urbeno.in"
+    assert sess["role"] == "Super Admin"
+    assert sess["name"]
+
+
+def test_smtp_transport_is_ipv4_with_465_fallback():
+    from pathlib import Path
+
+    from app import auth as auth_mod
+
+    src = Path(auth_mod.__file__).read_text(encoding="utf-8")
+    assert "AF_INET" in src
+    assert "_IPv4SMTP_SSL" in src
+    assert "465" in src
 
 
 def test_enroll_reuses_secret_and_survives_memory_clear(client):

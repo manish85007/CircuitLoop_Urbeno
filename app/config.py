@@ -47,6 +47,10 @@ def smtp_settings() -> dict:
     except ValueError:
         port = 587
     starttls = _env_str("SMTP_STARTTLS", "1").lower() not in {"0", "false", "no", "off"}
+    ssl_raw = _env_str("SMTP_SSL", "1" if port == 465 else "0").lower()
+    use_ssl = ssl_raw not in {"0", "false", "no", "off"} or port == 465
+    if use_ssl:
+        starttls = False
     return {
         "host": host,
         "port": port,
@@ -54,6 +58,8 @@ def smtp_settings() -> dict:
         "password": os.environ.get("SMTP_PASSWORD", ""),
         "from_addr": _env_str("SMTP_FROM", user or "circuitloop@urbeno.in") or (user or "circuitloop@urbeno.in"),
         "starttls": starttls,
+        "ssl": use_ssl,
+        "timeout": float(_env_str("SMTP_TIMEOUT", "12") or "12"),
     }
 
 
