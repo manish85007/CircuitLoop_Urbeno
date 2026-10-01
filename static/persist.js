@@ -383,17 +383,32 @@
     function renderCode(pending, kind) {
       hideHint();
       extra.innerHTML =
+        (pending && pending.previewCode
+          ? '<div class="okbox" style="margin-top:12px">Preview only — email was not sent. Code: <b id="auth_preview_code" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.12em"></b></div>'
+          : "") +
         '<label class="f" style="margin-top:12px">' +
         (kind === "email" ? "Email code" : "Authenticator code") +
         "</label>" +
         '<input id="auth_code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">' +
         (kind === "totp"
           ? '<button type="button" class="btn" id="auth_reset" style="width:100%;justify-content:center;margin-top:10px">Set up a new authenticator QR</button>'
-          : "");
+          : kind === "email"
+            ? '<button type="button" class="btn" id="auth_resend" style="width:100%;justify-content:center;margin-top:10px">Email a new code</button>'
+            : "");
+      if (pending && pending.previewCode) {
+        extra.querySelector("#auth_preview_code").textContent = pending.previewCode;
+        extra.querySelector("#auth_code").value = pending.previewCode;
+      }
       const reset = extra.querySelector("#auth_reset");
       if (reset) {
         reset.addEventListener("click", function () {
           startWith("enroll");
+        });
+      }
+      const resend = extra.querySelector("#auth_resend");
+      if (resend) {
+        resend.addEventListener("click", function () {
+          startWith("email");
         });
       }
       go.textContent = "Verify and sign in";

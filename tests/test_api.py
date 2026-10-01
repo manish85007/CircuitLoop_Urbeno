@@ -173,9 +173,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod10" in html
-    assert "qrcode.min.js?v=prod10" in html
-    assert "field.js?v=prod10" in html
+    assert "persist.js?v=prod11" in html
+    assert "qrcode.min.js?v=prod11" in html
+    assert "field.js?v=prod11" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -199,6 +199,8 @@ def test_index_production_login(client):
     assert "sessionUserFrom" in persist.text
     assert "Signing in" in persist.text
     assert "we will not send a fake code" in persist.text
+    assert "previewCode" in persist.text
+    assert "Email a new code" in persist.text
     assert "enterField" in persist.text
     assert "leaveField" in persist.text
     assert "paintLive" in persist.text
@@ -329,6 +331,9 @@ def test_smtp_transport_is_ipv4_with_465_fallback():
     assert "AF_INET" in src
     assert "_IPv4SMTP_SSL" in src
     assert "465" in src
+    assert 'local_hostname="localhost"' in src
+    assert "api.resend.com" in src
+    assert "previewCode" in src
 
 
 def test_enroll_reuses_secret_and_survives_memory_clear(client):
@@ -353,6 +358,26 @@ def test_email_otp_not_faked_without_smtp(client):
     res = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "email"})
     assert res.status_code == 400
     assert "authenticator" in res.json()["error"].lower()
+
+
+def test_preview_email_otp_returns_onscreen_code(client, monkeypatch):
+    monkeypatch.setenv("PREVIEW_LOGIN", "1")
+    monkeypatch.setenv("COOKIE_SECURE", "0")
+    res = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "email"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["factor"] == "email"
+    code = body.get("previewCode")
+    assert code and len(code) == 6 and code.isdigit()
+    verify = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["user"]["email"] == "manish@urbeno.in"
+
+
+def test_health_email_otp_follows_resend_key(client, monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_not_real")
+    res = client.get("/api/health")
+    assert res.json()["emailOtp"] is True
 
 
 def test_admin_verify_lockout_allows_retries(client):

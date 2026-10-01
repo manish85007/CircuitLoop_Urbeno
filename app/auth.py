@@ -8,6 +8,10 @@ import smtplib
 import socket
 import ssl
 import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from threading import Lock
@@ -28,6 +32,8 @@ from app.config import (
     cookie_secure,
     email_otp_enabled,
     ensure_dirs,
+    http_mail_settings,
+    preview_login_enabled,
     smtp_settings,
 )
 
@@ -258,8 +264,16 @@ def require_admin(request: Request) -> dict:
 
 def _sanitize_smtp_error(exc: BaseException) -> str:
     cfg = smtp_settings()
+    http = http_mail_settings()
     text = f"{type(exc).__name__}: {exc}"
-    for secret in (cfg.get("password"), cfg.get("user")):
+    secrets_to_hide = [
+        cfg.get("password"),
+        cfg.get("user"),
+        http.get("resend"),
+        http.get("sendgrid"),
+        http.get("mailgun_key"),
+    ]
+    for secret in secrets_to_hide:
         if secret:
             text = text.replace(str(secret), "***")
     return text.replace("\n", " ")[:220]
@@ -296,7 +310,7 @@ class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
 
 
 def _smtp_network_blocked(exc: BaseException) -> bool:
-    if isinstance(exc, TimeoutError):
+    if isinstance(exc, (TimeoutError, FuturesTimeout, socket.timeout)):
         return True
     if isinstance(exc, OSError):
         if getattr(exc, "errno", None) in {
@@ -308,39 +322,38 @@ def _smtp_network_blocked(exc: BaseException) -> bool:
         }:
             return True
         text = str(exc).lower()
-        if "unreachable" in text or "timed out" in text or "network is unreachable" in text:
+        if "unreachable" in text or "timed out" in text or "timeout" in text or "network is unreachable" in text:
             return True
     return False
 
 
 def _send_via(cfg: dict[str, Any], msg: EmailMessage, port: int, use_ssl: bool, starttls: bool) -> None:
-    timeout = float(cfg.get("timeout") or 12)
+    timeout = min(6.0, max(2.0, float(cfg.get("timeout") or 5)))
     host = cfg["host"]
     cls = _IPv4SMTP_SSL if use_ssl else _IPv4SMTP
-    with cls(host, int(port), timeout=timeout) as smtp:
+    with cls(host, int(port), local_hostname="localhost", timeout=timeout) as smtp:
+        smtp.ehlo()
         if starttls and not use_ssl:
             smtp.starttls()
+            smtp.ehlo()
         if cfg["user"]:
             smtp.login(cfg["user"], cfg["password"])
         smtp.send_message(msg)
 
 
-def _send_email(to_addr: str, subject: str, body: str) -> None:
-    cfg = smtp_settings()
-    if not cfg["host"]:
-        raise RuntimeError("SMTP is not configured.")
-    msg = EmailMessage()
-    msg["From"] = cfg["from_addr"]
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    msg.set_content(body)
-    attempts: list[tuple[int, bool, bool]] = []
+def _send_smtp(cfg: dict[str, Any], msg: EmailMessage) -> None:
     port = int(cfg["port"] or 587)
     use_ssl = bool(cfg.get("ssl") or port == 465)
     starttls = bool(cfg.get("starttls")) and not use_ssl
-    attempts.append((port, use_ssl, starttls))
-    if port != 465:
-        attempts.append((465, True, False))
+    attempts: list[tuple[int, bool, bool]] = []
+    if port == 465 or use_ssl:
+        attempts.append((465 if port == 465 else port, True, False))
+        if port != 587:
+            attempts.append((587, False, True))
+    else:
+        attempts.append((port, use_ssl, starttls))
+        if port != 465:
+            attempts.append((465, True, False))
     last: BaseException | None = None
     for try_port, ssl_on, tls_on in attempts:
         try:
@@ -354,11 +367,104 @@ def _send_email(to_addr: str, subject: str, body: str) -> None:
     assert last is not None
     raise OSError(
         "SMTP blocked from this host (IPv4 "
-        + cfg["host"]
-        + "). Tried port "
-        + str(port)
-        + " then 465 SSL. Use authenticator until outbound SMTP is allowed."
+        + str(cfg["host"])
+        + "). Tried "
+        + ", ".join(str(p) for p, _, _ in attempts)
+        + ". Set RESEND_API_KEY (HTTPS) or use authenticator."
     ) from last
+
+
+def _http_post(url: str, data: bytes, headers: dict[str, str], timeout: float = 8) -> bytes:
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            if int(getattr(resp, "status", 200) or 200) >= 400:
+                raise RuntimeError("Email API HTTP " + str(resp.status))
+            return body
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:180]
+        raise RuntimeError("Email API HTTP " + str(exc.code) + " " + detail) from exc
+
+
+def _send_http_mail(to_addr: str, subject: str, body: str) -> bool:
+    http = http_mail_settings()
+    cfg = smtp_settings()
+    from_addr = cfg["from_addr"] or http.get("mailgun_domain") or "circuitloop@urbeno.in"
+    if http["resend"]:
+        payload = json.dumps({"from": from_addr, "to": [to_addr], "subject": subject, "text": body}).encode()
+        _http_post(
+            "https://api.resend.com/emails",
+            payload,
+            {"Authorization": "Bearer " + http["resend"], "Content-Type": "application/json"},
+        )
+        return True
+    if http["sendgrid"]:
+        payload = json.dumps(
+            {
+                "personalizations": [{"to": [{"email": to_addr}]}],
+                "from": {"email": from_addr},
+                "subject": subject,
+                "content": [{"type": "text/plain", "value": body}],
+            }
+        ).encode()
+        _http_post(
+            "https://api.sendgrid.com/v3/mail/send",
+            payload,
+            {"Authorization": "Bearer " + http["sendgrid"], "Content-Type": "application/json"},
+        )
+        return True
+    if http["mailgun_key"] and http["mailgun_domain"]:
+        import base64
+        from urllib.parse import urlencode
+
+        token = base64.b64encode(("api:" + http["mailgun_key"]).encode()).decode()
+        form = urlencode(
+            {"from": from_addr, "to": to_addr, "subject": subject, "text": body}
+        ).encode()
+        _http_post(
+            "https://api.mailgun.net/v3/" + http["mailgun_domain"] + "/messages",
+            form,
+            {"Authorization": "Basic " + token, "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        return True
+    return False
+
+
+def _mail_can_deliver() -> bool:
+    cfg = smtp_settings()
+    http = http_mail_settings()
+    return bool(cfg["host"] or http["resend"] or http["sendgrid"] or (http["mailgun_key"] and http["mailgun_domain"]))
+
+
+def _send_email(to_addr: str, subject: str, body: str) -> bool:
+    """Return True if a provider accepted the message."""
+    http_err: BaseException | None = None
+    try:
+        if _send_http_mail(to_addr, subject, body):
+            return True
+    except Exception as exc:
+        http_err = exc
+    cfg = smtp_settings()
+    if cfg["host"]:
+        msg = EmailMessage()
+        msg["From"] = cfg["from_addr"]
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        msg.set_content(body)
+        timeout = min(12.0, max(6.0, float(cfg.get("timeout") or 5) * 2 + 2))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_send_smtp, cfg, msg)
+            try:
+                fut.result(timeout=timeout)
+            except FuturesTimeout as exc:
+                raise OSError("SMTP send timed out after " + str(int(timeout)) + "s") from (http_err or exc)
+        return True
+    if http_err:
+        raise http_err
+    if preview_login_enabled():
+        return False
+    raise RuntimeError("SMTP is not configured.")
 
 
 def _normalize_method(method: str) -> str:
@@ -405,21 +511,33 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
                 "kind": "email",
             },
         )
+        delivered = False
+        send_err: BaseException | None = None
         try:
-            _send_email(
+            delivered = bool(_send_email(
                 addr,
                 "CircuitLoop sign-in code",
                 f"Your CircuitLoop one-time code is {code}. It expires in 10 minutes.\n",
-            )
+            ))
         except Exception as exc:
+            send_err = exc
+            delivered = False
+        preview = preview_login_enabled()
+        if not delivered and not preview:
             raise HTTPException(
                 status_code=503,
                 detail="Could not send email OTP ("
-                + _sanitize_smtp_error(exc)
-                + "). Use authenticator or check SMTP settings.",
-            ) from exc
-        append_audit(account, "auth.start", "session", addr, "email OTP sent")
-        return {
+                + _sanitize_smtp_error(send_err or RuntimeError("SMTP is not configured."))
+                + "). Use authenticator, or set RESEND_API_KEY for HTTPS delivery on Railway.",
+            ) from send_err
+        append_audit(
+            account,
+            "auth.start",
+            "session",
+            addr,
+            "email OTP sent" if delivered else "email OTP preview",
+        )
+        payload = {
             "ok": True,
             "email": addr,
             "factor": "email",
@@ -427,6 +545,13 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
             "totpEnrolled": enrolled,
             "message": "Enter the 6-digit code emailed to you, or your authenticator code if enrolled.",
         }
+        if preview and not delivered:
+            payload["previewCode"] = code
+            payload["message"] = (
+                "Preview only — outbound email was not sent. Enter the on-screen code. "
+                "Production needs working SMTP or RESEND_API_KEY."
+            )
+        return payload
 
     replace = choice == "enroll" and enrolled
     if enrolled and not replace:

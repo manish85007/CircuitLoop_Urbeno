@@ -31,17 +31,24 @@ If a code does not match, use **Set up a new authenticator QR**, delete the old 
 
 If `BOOTSTRAP_TOKEN` is set on the server, the first enroll also requires that token (recommended).
 
-### Email OTP (optional)
+### Email OTP
 
-When SMTP is configured, Continue emails a 6-digit code (10 minutes). You can still use TOTP if enrolled.
+When an email provider is configured, **Email me a code** sends a 6-digit code (10 minutes). You can still use TOTP if enrolled.
+
+Railway commonly drops outbound SMTP. Prefer **Resend** (HTTPS) if Gmail SMTP times out.
 
 | Variable | Purpose |
 | --- | --- |
-| `SMTP_HOST` | Enable email OTP (unset = TOTP only) |
-| `SMTP_PORT` | Default `587` |
-| `SMTP_USER` / `SMTP_PASSWORD` | SMTP auth |
+| `SMTP_HOST` | SMTP server (Gmail: `smtp.gmail.com`) |
+| `SMTP_PORT` | Default `587` (also retries `465` SSL) |
+| `SMTP_USER` / `SMTP_PASSWORD` | SMTP auth (Gmail app password, not the inbox password) |
 | `SMTP_FROM` | From address |
-| `SMTP_STARTTLS` | Default on |
+| `SMTP_STARTTLS` | Default on for 587 |
+| `RESEND_API_KEY` | HTTPS email via [Resend](https://resend.com) — works on Railway when SMTP is blocked |
+| `SENDGRID_API_KEY` | HTTPS email via SendGrid |
+| `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` | HTTPS email via Mailgun |
+
+Local Preview with `PREVIEW_LOGIN=1` shows the code on screen when mail cannot be sent. Production never returns the code in the API.
 
 ## Run locally
 
@@ -80,7 +87,8 @@ Push to `main`. Service `web` builds the Dockerfile. Volume at `/data`.
 | `BLANCCO_ENDPOINT` | Blancco API URL |
 | `CORS_ORIGINS` | Default `https://loop.urbeno.in` |
 | `BACKUP_KEEP_DAILY` / `BACKUP_KEEP_MONTHLY` | Default 30 / 12 |
-| SMTP_* | Email OTP |
+| SMTP_* | Email OTP over SMTP (often blocked on Railway) |
+| `RESEND_API_KEY` | Email OTP over HTTPS (recommended on Railway) |
 
 On first boot of this version the historical register (demo users, assets, clients, projects, simulated Blancco) is wiped to an empty production register containing only the two users. A cutover marker on `/data` prevents a second wipe.
 

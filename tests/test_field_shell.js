@@ -16,16 +16,18 @@ function assert(cond, msg) {
   }
 }
 
+assert(field.includes("function enterField("), "enterField in field.js");
 assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod10"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod10"), "prod10 cache bust");
+assert(html.includes("field.js?v=prod11"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod11"), "prod11 cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
 assert(persist.includes("DELETE") && persist.includes("/api/session"), "logout deletes session");
+assert(persist.includes("previewCode"), "preview email OTP shown on-screen");
 
 function fakeDom() {
   const ids = {};

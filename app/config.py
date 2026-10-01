@@ -55,11 +55,20 @@ def smtp_settings() -> dict:
         "host": host,
         "port": port,
         "user": user,
-        "password": os.environ.get("SMTP_PASSWORD", ""),
+        "password": _env_str("SMTP_PASSWORD"),
         "from_addr": _env_str("SMTP_FROM", user or "circuitloop@urbeno.in") or (user or "circuitloop@urbeno.in"),
         "starttls": starttls,
         "ssl": use_ssl,
-        "timeout": float(_env_str("SMTP_TIMEOUT", "12") or "12"),
+        "timeout": float(_env_str("SMTP_TIMEOUT", "5") or "5"),
+    }
+
+
+def http_mail_settings() -> dict:
+    return {
+        "resend": _env_str("RESEND_API_KEY"),
+        "sendgrid": _env_str("SENDGRID_API_KEY"),
+        "mailgun_key": _env_str("MAILGUN_API_KEY"),
+        "mailgun_domain": _env_str("MAILGUN_DOMAIN"),
     }
 
 
@@ -75,7 +84,12 @@ BOOTSTRAP_TOKEN = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
 
 
 def email_otp_enabled() -> bool:
-    return bool(smtp_settings()["host"])
+    if preview_login_enabled():
+        return True
+    if smtp_settings()["host"]:
+        return True
+    http = http_mail_settings()
+    return bool(http["resend"] or http["sendgrid"] or (http["mailgun_key"] and http["mailgun_domain"]))
 
 
 def cookie_secure() -> bool:
