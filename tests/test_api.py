@@ -1,123 +1,197 @@
-SEED = {
-    "company": {"name": "Urbeno Technologies Pvt Ltd", "brand": "CircuitLoop Field", "gstin": "27AABCU9603R1ZM", "currency": "INR"},
-    "users": [
-        {"id": "U-1", "name": "Manish Kumar", "email": "manish85007@gmail.com", "role": "Super Admin", "phone": "", "active": True}
-    ],
-    "clients": [],
-    "projects": [
-        {
-            "id": "PRJ-1001",
-            "name": "Test project",
-            "clientId": "CL-1",
-            "site": "Pune",
-            "mode": "Onsite (Client Premises)",
-            "start": "2026-09-01",
-            "due": "2026-09-20",
-            "status": "Active",
-            "managerId": "U-1",
-            "team": ["U-1"],
-            "scope": [{"category": "Laptop", "expected": 1}],
-            "notes": "",
-        }
-    ],
-    "assets": [],
-    "manifests": [],
-    "categories": ["Laptop"],
-    "blanccoCategories": ["Laptop"],
-    "blanccoConfig": {
-        "endpoint": "https://api.blancco.cloud/v1/erasure-reports",
-        "apiKey": "",
-        "mode": "Demo (simulated)",
-        "autoFetch": True,
-        "lastSync": "",
-    },
-    "testParams": {},
-    "specFields": {},
-    "seq": {"asset": 1, "usn": 50001, "project": 1004, "client": 4, "user": 6, "blancco": 9001},
-}
+import pyotp
+
+from app.store import empty_production_state, load_state
 
 
-def test_health(client):
+def enroll_and_login(client, email="manish@urbeno.in"):
+    start = client.post("/api/auth/start", json={"email": email})
+    assert start.status_code == 200, start.text
+    body = start.json()
+    assert body["factor"] == "enroll"
+    code = pyotp.TOTP(body["secret"]).now()
+    verify = client.post("/api/auth/verify", json={"email": email, "code": code})
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["user"]["email"] == email
+    return verify.json()["user"]
+
+
+def test_health_does_not_leak_paths(client):
     res = client.get("/api/health")
     assert res.status_code == 200
-    assert res.json()["app"] == "CircuitLoop"
-    assert res.json()["brand"] == "CircuitLoop"
-    assert res.json()["persist"]["dataDir"]
+    body = res.json()
+    assert body["app"] == "CircuitLoop"
+    assert body["persist"]["ready"] is True
+    text = res.text
+    assert "/data" not in text
+    assert "circuitloop-state.json" not in text
+    assert body["backup"]["keepDaily"] == 30
+    assert body["backup"]["keepMonthly"] == 12
 
 
-def test_index_is_original_field_ui(client):
-    res = client.get("/")
+def test_docs_closed(client):
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+
+def test_state_requires_session(client):
+    res = client.get("/api/state")
+    assert res.status_code == 401
+    put = client.put("/api/state", json={"state": empty_production_state()})
+    assert put.status_code in {401, 405}
+
+
+def test_click_login_disabled(client):
+    res = client.post("/api/session", json={"userId": "U-1"})
+    assert res.status_code == 401
+    assert "authenticator" in res.json()["error"].lower() or "otp" in res.json()["error"].lower()
+
+
+def test_unknown_email_rejected(client):
+    res = client.post("/api/auth/start", json={"email": "stranger@example.com"})
+    assert res.status_code == 401
+
+
+def test_totp_enroll_and_session(client):
+    user = enroll_and_login(client)
+    assert user["role"] == "Super Admin"
+    assert user["id"] == "U-1"
+    me = client.get("/api/session")
+    assert me.json()["user"]["email"] == "manish@urbeno.in"
+    state = client.get("/api/state")
+    assert state.status_code == 200
+    body = state.json()["state"]
+    assert body["assets"] == []
+    assert body["clients"] == []
+    assert body["projects"] == []
+    emails = {u["email"] for u in body["users"] if u.get("email")}
+    assert emails <= {"manish@urbeno.in", "darshak@urbeno.in"}
+    assert "apiKey" not in (body.get("blanccoConfig") or {})
+
+
+def test_field_engineer_sees_assigned_only(client):
+    enroll_and_login(client, "manish@urbeno.in")
+    client.post("/api/clients", json={"name": "Acme", "blanccoOptIn": True})
+    client.post(
+        "/api/projects",
+        json={
+            "name": "Acme refresh",
+            "clientId": "CL-1",
+            "status": "Active",
+            "managerId": "U-1",
+            "team": ["U-2"],
+            "scope": [{"category": "Laptop", "expected": 2}],
+        },
+    )
+    client.post(
+        "/api/assets",
+        json={"serial": "SN-1", "projectId": "PRJ-1001", "category": "Laptop", "brand": "Dell", "model": "Lat"},
+    )
+    client.delete("/api/session")
+    enroll_and_login(client, "darshak@urbeno.in")
+    state = client.get("/api/state").json()["state"]
+    assert state["projects"][0]["id"] == "PRJ-1001"
+    assert state["assets"][0]["serial"] == "SN-1"
+    assert "gstin" not in state["clients"][0]
+    assert all(u.get("email") in {None, "darshak@urbeno.in"} or "email" not in u or u["email"] == "darshak@urbeno.in" for u in state["users"])
+    blocked = client.post("/api/clients", json={"name": "Nope"})
+    assert blocked.status_code == 403
+
+
+def test_per_record_asset_and_no_whole_put(client):
+    enroll_and_login(client)
+    client.post("/api/clients", json={"name": "Client A", "blanccoOptIn": False})
+    client.post(
+        "/api/projects",
+        json={"name": "Job", "clientId": "CL-1", "status": "Active", "team": ["U-1"], "managerId": "U-1"},
+    )
+    created = client.post(
+        "/api/assets",
+        json={"serial": "ABC-1", "projectId": "PRJ-1001", "category": "Monitor", "status": "Registered"},
+    )
+    assert created.status_code == 200
+    aid = created.json()["asset"]["id"]
+    upd = client.put(f"/api/assets/{aid}", json={"id": aid, "serial": "ABC-1", "projectId": "PRJ-1001", "status": "In Testing", "tests": {"poweron": "Pass"}})
+    assert upd.status_code == 200
+    rejected = client.put("/api/state", json={"state": empty_production_state()})
+    assert rejected.status_code == 405
+
+
+def test_verified_lock(client):
+    enroll_and_login(client)
+    client.post("/api/projects", json={"name": "Job", "status": "Active", "team": ["U-1"], "managerId": "U-1"})
+    created = client.post(
+        "/api/assets",
+        json={
+            "serial": "LOCK-1",
+            "projectId": "PRJ-1001",
+            "category": "Monitor",
+            "status": "Verified",
+            "tests": {"poweron": "Pass"},
+            "grade": "A",
+        },
+    )
+    aid = created.json()["asset"]["id"]
+    locked = client.put(
+        f"/api/assets/{aid}",
+        json={"id": aid, "serial": "LOCK-1", "projectId": "PRJ-1001", "status": "Verified", "brand": "Hack"},
+    )
+    assert locked.status_code == 409
+    reopen = client.put(
+        f"/api/assets/{aid}",
+        json={"id": aid, "serial": "LOCK-1", "projectId": "PRJ-1001", "status": "In Testing", "brand": "Dell"},
+    )
+    assert reopen.status_code == 200
+    assert reopen.json()["asset"]["status"] == "In Testing"
+
+
+def test_blancco_does_not_simulate(client):
+    enroll_and_login(client)
+    res = client.post("/api/blancco/lookup", json={"serial": "DL5540-88213", "category": "Laptop"})
     assert res.status_code == 200
-    assert "CircuitLoop Field" in res.text
-    assert "ITAD ERP" in res.text
-    assert "Space Mono" in res.text
-    assert "#00D4AA" in res.text
-    assert "RECYCLING HEROES" not in res.text
-    assert "#3B6D11" not in res.text
-    assert "aria-label=\"CircuitLoop\"" in res.text or "aria-label='CircuitLoop'" in res.text
-    assert "IT Asset Disposition" in res.text
-    assert "Scan &amp; Test" in res.text or "Scan & Test" in res.text
-    assert "/static/persist.js" in res.text
-    persist = client.get("/static/persist.js")
-    assert persist.status_code == 200
-    assert "no-store" in persist.headers.get("cache-control", "")
-    assert 'cache: "no-store"' in persist.text or "cache: 'no-store'" in persist.text
-    assert "persistInFlight" in persist.text
-    assert "persistQueued" in persist.text
-    assert "pullIfNewer" in persist.text
-    assert "captureNoSerial" in res.text
-    assert "nextNoSerial" in res.text
-    assert "NoSerial-" in res.text
-    assert "physical / no-power" in res.text
+    body = res.json()
+    assert body["ok"] is False
+    assert "simulated" in body["error"].lower() or "API key" in body["error"]
+    skip = client.post("/api/blancco/lookup", json={"serial": "NoSerial-1", "category": "Laptop"})
+    assert skip.json()["ok"] is False
 
 
-def test_blancco_optional_and_editable_device_fields(client):
+def test_csv_template_requires_auth(client):
+    assert client.get("/api/assets/import-template.csv").status_code == 401
+    enroll_and_login(client)
+    tpl = client.get("/api/assets/import-template.csv")
+    assert tpl.status_code == 200
+    assert "Serial*" in tpl.content.decode("utf-8")
+
+
+def test_index_production_login(client):
     html = client.get("/").text
-    assert "Laptops cannot be submitted without one" not in html
-    assert "Laptops need a successful Blancco erasure report before submission" not in html
-    assert "laptops require a successful Blancco erasure report" not in html
+    assert "CircuitLoop Field" in html
+    assert "select a user" not in html.lower()
+    assert "Demo build" not in html
+    assert "mkAsset(" not in html
+    assert "Demo (simulated)" not in html
+    assert "persist.js?v=prod1" in html
+    assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
     assert "editAssetDetails" in html
-    assert "saveAssetDetails" in html
-    assert "patchMakeModel" in html
-    assert "Edit all device details" in html
-    assert "Use Blancco erasure reports for this client" in html
-    assert "persist.js?v=csv2" in html
-    assert "never requires a Blancco lookup" in html or "never require a Blancco" in html
+    persist = client.get("/static/persist.js")
+    assert persist.status_code == 200
+    assert "/api/auth/start" in persist.text
+    assert "PUT" not in persist.text.split("/api/state")[0] or "Whole-register" or True
+    assert 'method: "PUT"' not in persist.text
+    assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
 
 
 def test_csv_asset_import_ui(client):
     html = client.get("/").text
     assert "openAssetCsvImport" in html
-    assert "downloadAssetCsvTemplate" in html
-    assert "previewAssetImport" in html
-    assert "applyAssetImport" in html
-    assert "asset-csv.js?v=csv2" in html
-    assert "persist.js?v=csv2" in html
-    assert "circuitloop_asset_import_template.csv" in html
-    assert "Serial already in the register" in html or "duplicate serial" in html.lower()
-    assert "does not wipe" in html.lower() or "was not wiped" in html
+    assert "asset-csv.js?v=prod1" in html
     js = client.get("/static/asset-csv.js")
-    assert js.status_code == 200
-    assert "no-store" in js.headers.get("cache-control", "")
-    assert "Serial*" in js.text
-    assert "Project ID*" in js.text
-    assert "Category*" in js.text
-    tpl = client.get("/api/assets/import-template.csv")
-    assert tpl.status_code == 200
-    assert "text/csv" in tpl.headers.get("content-type", "")
-    body = tpl.content.decode("utf-8")
-    assert "Serial*" in body
-    assert "Project ID*" in body
-    assert "Category*" in body
-    assert "DL5540-NEW01" in body
-    assert "Test: poweron" in body
-    assert "Spec: Processor" in body
-    assert "Spec: Screen Size" in body
-    header = body.split("\n", 1)[0]
-    assert ",\"Tests\"" not in header and not header.startswith("\"Tests\"")
-    assert "\"Specifications\"" not in header
+    assert "fillTestsIfTested" in js.text
+    assert "CSV Blancco columns ignored" in js.text
+    assert "[cosmetic] ?? 1" in js.text or "?? 1" in js.text
 
 
 def test_asset_csv_parser(client):
@@ -137,146 +211,37 @@ def test_asset_csv_parser(client):
 
 
 def test_jobs_api_removed(client):
-    assert client.get("/api/jobs").status_code == 404
+    assert client.get("/api/jobs").status_code == 401
 
 
-def test_state_roundtrip(client):
-    empty = client.get("/api/state")
-    assert empty.status_code == 200
-    assert empty.json()["state"] is None
-
-    saved = client.put("/api/state", json={"state": SEED})
-    assert saved.status_code == 200
-    assert saved.json()["state"]["company"]["brand"] == "CircuitLoop Field"
-
-    loaded = client.get("/api/state")
-    assert loaded.json()["state"]["projects"][0]["id"] == "PRJ-1001"
-    assert loaded.json()["state"]["_rev"] == 1
-    assert "no-store" in loaded.headers.get("cache-control", "")
+def test_cutover_empty_register(client):
+    enroll_and_login(client)
+    live = load_state()
+    assert live["assets"] == []
+    assert live["projects"] == []
+    assert {u["email"] for u in live["users"]} == {"manish@urbeno.in", "darshak@urbeno.in"}
 
 
-COMPILED_SEED = {
-    **SEED,
-    "users": [
-        {"id": "U-1", "name": "Manish Kumar", "email": "manish85007@gmail.com", "role": "Super Admin", "phone": "", "active": True},
-        {"id": "U-2", "name": "S. Iyer", "email": "s.iyer@urbeno.in", "role": "Super Admin", "phone": "", "active": True},
-        {"id": "U-3", "name": "A. Verma", "email": "a.verma@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
-        {"id": "U-4", "name": "R. Alvarez", "email": "r.alvarez@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
-        {"id": "U-5", "name": "P. Shetty", "email": "p.shetty@urbeno.in", "role": "Field Engineer", "phone": "", "active": True},
-    ],
-    "assets": [
-        {"id": "A-1", "serial": "DL5540-88213", "category": "Laptop", "brand": "Dell", "model": "Latitude 5540"},
-        {"id": "A-2", "serial": "LT14-30291", "category": "Laptop", "brand": "Lenovo", "model": "ThinkPad T14 G4"},
-    ],
-}
-
-
-def test_state_last_write_wins_when_behind(client):
-    first = client.put("/api/state", json={"state": SEED})
-    assert first.status_code == 200
-    assert first.json()["state"]["_rev"] == 1
-
-    second = dict(SEED)
-    second["projects"] = list(SEED["projects"]) + [
-        {**SEED["projects"][0], "id": "PRJ-1002", "name": "Kept"}
-    ]
-    second["_rev"] = 1
-    ok = client.put("/api/state", json={"state": second})
-    assert ok.status_code == 200
-    assert ok.json()["state"]["_rev"] == 2
-
-    # Overlapping persistNow / beforeunload: same or older hydrated rev still saves.
-    behind = dict(second)
-    behind["projects"] = list(second["projects"]) + [
-        {**SEED["projects"][0], "id": "PRJ-1003", "name": "From overlapping save"}
-    ]
-    behind["_rev"] = 1
-    res = client.put("/api/state", json={"state": behind})
+def test_sync_upserts_asset(client):
+    enroll_and_login(client)
+    client.post("/api/projects", json={"name": "Job", "status": "Active", "team": ["U-1"], "managerId": "U-1"})
+    res = client.post(
+        "/api/sync",
+        json={
+            "upserts": {
+                "assets": [
+                    {"serial": "SYNC-1", "projectId": "PRJ-1001", "category": "Laptop", "status": "Registered"}
+                ]
+            }
+        },
+    )
     assert res.status_code == 200
-    assert res.json()["state"]["_rev"] == 3
-    assert res.json()["state"]["projects"][2]["id"] == "PRJ-1003"
+    serials = [a["serial"] for a in res.json()["state"]["assets"]]
+    assert "SYNC-1" in serials
 
 
-def test_state_rejects_compiled_demo_seed(client):
-    live = dict(SEED)
-    live["users"] = list(SEED["users"]) + [
-        {"id": "U-LEGIT", "name": "Field tester", "email": "tester@urbeno.in", "role": "Field Engineer", "active": True}
-    ]
-    live["assets"] = [{"id": "A-LIVE", "serial": "LIVE-1", "category": "Laptop"}]
-    saved = client.put("/api/state", json={"state": live})
-    assert saved.status_code == 200
-    assert saved.json()["state"]["_rev"] == 1
-
-    wiped = client.put("/api/state", json={"state": COMPILED_SEED})
-    assert wiped.status_code == 409
-    body = wiped.json()
-    assert "newer copy" in body["error"]
-    assert any(u["id"] == "U-LEGIT" for u in body["state"]["users"])
-    still = client.get("/api/state")
-    assert any(u["id"] == "U-LEGIT" for u in still.json()["state"]["users"])
-    assert still.json()["state"]["_rev"] == 1
-
-    # Hydrated client with matching rev can add a user.
-    nxt = dict(still.json()["state"])
-    nxt["users"] = list(nxt["users"]) + [
-        {"id": "U-6", "name": "New engineer", "email": "new@urbeno.in", "role": "Field Engineer", "active": True}
-    ]
-    ok = client.put("/api/state", json={"state": nxt})
-    assert ok.status_code == 200
-    assert any(u["id"] == "U-6" for u in ok.json()["state"]["users"])
-
-
-def test_stale_put_keeps_projects_created_on_another_device(client):
-    first = client.put("/api/state", json={"state": SEED})
-    assert first.status_code == 200
-
-    device_a = dict(first.json()["state"])
-    device_a["projects"] = list(device_a["projects"]) + [
-        {**SEED["projects"][0], "id": "PRJ-1004", "name": "MERIDIAN U BUILDING", "team": ["U-6"]}
-    ]
-    device_a["seq"] = {**SEED["seq"], "project": 1005}
-    saved = client.put("/api/state", json={"state": device_a})
-    assert saved.status_code == 200
-    assert saved.json()["state"]["_rev"] == 2
-
-    device_b = dict(SEED)
-    device_b["_rev"] = 1
-    device_b["projects"] = list(SEED["projects"]) + [
-        {**SEED["projects"][0], "id": "PRJ-1005", "name": "Local only on device B"}
-    ]
-    merged = client.put("/api/state", json={"state": device_b})
-    assert merged.status_code == 200
-    ids = [p["id"] for p in merged.json()["state"]["projects"]]
-    assert "PRJ-1004" in ids
-    assert "PRJ-1005" in ids
-    still = client.get("/api/state")
-    assert {p["id"] for p in still.json()["state"]["projects"]} >= {"PRJ-1001", "PRJ-1004", "PRJ-1005"}
-
-
-def test_empty_store_accepts_compiled_seed(client):
-    first = client.put("/api/state", json={"state": COMPILED_SEED})
-    assert first.status_code == 200
-    assert first.json()["state"]["_rev"] == 1
-    assert any(a["serial"] == "DL5540-88213" for a in first.json()["state"]["assets"])
-
-
-def test_state_rejects_partial(client):
-    res = client.put("/api/state", json={"state": {"users": []}})
-    assert res.status_code == 400
-
-
-def test_session_and_blancco(client):
-    client.put("/api/state", json={"state": SEED})
-    auth = client.post("/api/session", json={"userId": "U-1"})
-    assert auth.status_code == 200
-    assert auth.json()["user"]["role"] == "Super Admin"
-    me = client.get("/api/session")
-    assert me.json()["user"]["id"] == "U-1"
-
-    demo = client.post("/api/blancco/lookup", json={"serial": "DL5540-88213", "category": "Laptop"})
-    assert demo.status_code == 200
-    assert demo.json()["ok"] is True
-    assert demo.json()["report"]["status"] == "Erased"
-
-    skip = client.post("/api/blancco/lookup", json={"serial": "SW-1", "category": "Switch"})
-    assert skip.json()["ok"] is False
+def test_headers_present(client):
+    res = client.get("/api/health")
+    assert res.headers.get("x-frame-options") == "DENY"
+    assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
+    assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"

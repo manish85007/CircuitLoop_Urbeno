@@ -1,6 +1,6 @@
 """Daily production backup on the same DATA_DIR volume.
 
-Keeps only the latest successful snapshot. Never deletes the live register.
+Keeps 30 daily snapshots and 12 monthly copies. Never deletes the live register.
 """
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from typing import Any
 from app.config import (
     BACKUP_DIR,
     BACKUP_HOUR_UTC,
+    BACKUP_KEEP_DAILY,
+    BACKUP_KEEP_MONTHLY,
     BACKUP_MINUTE_UTC,
     BACKUP_STALE_HOURS,
     BACKUP_STARTUP_DELAY_SEC,
@@ -51,15 +53,37 @@ def schedule_label() -> str:
     )
 
 
+def _is_daily_dir(path: Path) -> bool:
+    return (
+        path.is_dir()
+        and path.name.startswith("circuitloop-")
+        and not path.name.startswith("circuitloop-monthly-")
+        and not path.name.startswith(".")
+    )
+
+
+def _is_monthly_dir(path: Path) -> bool:
+    return path.is_dir() and path.name.startswith("circuitloop-monthly-")
+
+
 def _is_backup_dir(path: Path) -> bool:
-    return path.is_dir() and path.name.startswith("circuitloop-") and not path.name.startswith(".")
+    return _is_daily_dir(path)
 
 
 def list_backup_dirs() -> list[Path]:
     if not BACKUP_DIR.exists():
         return []
     return sorted(
-        (p for p in BACKUP_DIR.iterdir() if _is_backup_dir(p)),
+        (p for p in BACKUP_DIR.iterdir() if _is_daily_dir(p)),
+        key=lambda p: p.name,
+    )
+
+
+def list_monthly_dirs() -> list[Path]:
+    if not BACKUP_DIR.exists():
+        return []
+    return sorted(
+        (p for p in BACKUP_DIR.iterdir() if _is_monthly_dir(p)),
         key=lambda p: p.name,
     )
 
@@ -83,14 +107,40 @@ def _read_manifest(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def public_backup_status() -> dict[str, Any]:
+    """Health payload: no filesystem paths."""
+    full = backup_status()
+    latest = full.get("latest") or None
+    pub_latest = None
+    if latest:
+        pub_latest = {
+            "id": latest.get("id"),
+            "createdAt": latest.get("createdAt"),
+            "bytes": latest.get("bytes"),
+            "rev": latest.get("rev"),
+        }
+    return {
+        "enabled": full.get("enabled"),
+        "schedule": full.get("schedule"),
+        "keepDaily": full.get("keepDaily"),
+        "keepMonthly": full.get("keepMonthly"),
+        "latest": pub_latest,
+    }
+
+
 def backup_status() -> dict[str, Any]:
     latest = latest_backup_dir()
     payload: dict[str, Any] = {
         "enabled": backup_enabled(),
         "dir": str(BACKUP_DIR),
         "schedule": schedule_label(),
-        "keep": 1,
-        "rotation": "after a successful new backup, previous backups in this directory are deleted",
+        "keepDaily": BACKUP_KEEP_DAILY,
+        "keepMonthly": BACKUP_KEEP_MONTHLY,
+        "keep": BACKUP_KEEP_DAILY,
+        "rotation": (
+            f"keep {BACKUP_KEEP_DAILY} daily snapshots and {BACKUP_KEEP_MONTHLY} "
+            "monthly copies on this volume"
+        ),
         "latest": None,
     }
     if latest is None:
@@ -146,7 +196,8 @@ def _write_staging(staging: Path, raw: bytes, parsed: dict[str, Any], now: datet
         "rev": parsed.get("_rev"),
         "savedAt": parsed.get("_savedAt"),
         "files": files,
-        "keep": 1,
+        "keepDaily": BACKUP_KEEP_DAILY,
+        "keepMonthly": BACKUP_KEEP_MONTHLY,
     }
     (staging / MANIFEST_NAME).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -163,19 +214,33 @@ def _cleanup_incoming() -> None:
             shutil.rmtree(path, ignore_errors=True)
 
 
-def _rotate_to(kept: Path) -> list[str]:
+def _rotate_dailies() -> list[str]:
     removed: list[str] = []
-    kept_resolved = kept.resolve()
-    for path in list(BACKUP_DIR.iterdir()):
-        if path.resolve() == kept_resolved:
-            continue
-        if path.name.startswith(".incoming-") or _is_backup_dir(path):
-            if path.is_dir():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
-            removed.append(path.name)
+    dailies = list_backup_dirs()
+    extra = dailies[: max(0, len(dailies) - BACKUP_KEEP_DAILY)]
+    for path in extra:
+        shutil.rmtree(path)
+        removed.append(path.name)
     return removed
+
+
+def _rotate_monthlies() -> list[str]:
+    removed: list[str] = []
+    monthlies = list_monthly_dirs()
+    extra = monthlies[: max(0, len(monthlies) - BACKUP_KEEP_MONTHLY)]
+    for path in extra:
+        shutil.rmtree(path)
+        removed.append(path.name)
+    return removed
+
+
+def _ensure_monthly(final: Path, now: datetime) -> str | None:
+    stamp = now.strftime("%Y-%m")
+    dest = BACKUP_DIR / f"circuitloop-monthly-{stamp}"
+    if dest.exists():
+        return None
+    shutil.copytree(final, dest)
+    return dest.name
 
 
 def run_backup() -> dict[str, Any]:
@@ -216,12 +281,14 @@ def run_backup() -> dict[str, Any]:
         log.exception("daily backup failed before rotate; previous backup kept")
         raise
 
-    removed = _rotate_to(final)
+    monthly = _ensure_monthly(final, now)
+    removed = _rotate_dailies() + _rotate_monthlies()
     result = {
         "ok": True,
         "id": final.name,
         "path": str(final),
         "livePath": str(STATE_PATH),
+        "monthly": monthly,
         "removed": removed,
         **manifest,
     }

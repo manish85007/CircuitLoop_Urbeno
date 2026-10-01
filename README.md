@@ -1,6 +1,44 @@
 # CircuitLoop
 
-Field console for IT asset testing and project management. The UI is CircuitLoop Field; FastAPI persists that in-memory `DB` and proxies Blancco lookups.
+Field console for IT asset testing. FastAPI persists a JSON register, enforces login, and proxies Blancco lookups.
+
+Production: https://loop.urbeno.in
+
+## Sign in (production)
+
+Login is restricted to:
+
+| Email | Role |
+| --- | --- |
+| **manish@urbeno.in** | Super Admin |
+| **darshak@urbeno.in** | User / Field Engineer |
+
+Roles are assigned on the server. There is no click-a-name login.
+
+### First-time authenticator (TOTP) enroll
+
+SMTP is optional. If no email API is configured, authenticator is the working factor.
+
+1. Open https://loop.urbeno.in
+2. Enter your Urbeno email and Continue.
+3. Add **CircuitLoop** in Google Authenticator, Authy, or 1Password:
+   - Scan / paste the `otpauth://` URL, or type the secret shown.
+4. Enter the 6-digit code to confirm. That binds the authenticator to your account.
+5. Later visits: email + 6-digit authenticator code.
+
+If `BOOTSTRAP_TOKEN` is set on the server, the first enroll also requires that token (recommended).
+
+### Email OTP (optional)
+
+When SMTP is configured, Continue emails a 6-digit code (10 minutes). You can still use TOTP if enrolled.
+
+| Variable | Purpose |
+| --- | --- |
+| `SMTP_HOST` | Enable email OTP (unset = TOTP only) |
+| `SMTP_PORT` | Default `587` |
+| `SMTP_USER` / `SMTP_PASSWORD` | SMTP auth |
+| `SMTP_FROM` | From address |
+| `SMTP_STARTTLS` | Default on |
 
 ## Run locally
 
@@ -8,108 +46,56 @@ Field console for IT asset testing and project management. The UI is CircuitLoop
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 43180 --reload
 ```
 
-Open [http://127.0.0.1:43180](http://127.0.0.1:43180).
-
-Sign in by picking a demo user. Super Admin (Manish Kumar, S. Iyer) sees every module. Field Engineers see Scan & Test and My Projects for assigned work.
-
-Optional: `cp .env.example .env`. The process starts with compiled local fallbacks if you skip this.
+Open [http://127.0.0.1:43180](http://127.0.0.1:43180). Sign in as above. The local register starts empty except the two users.
 
 ```bash
 pytest -q
 ```
 
-## Docker
-
-```bash
-docker build -t circuitloop .
-docker run --rm -p 43180:8080 -e PORT=8080 circuitloop
-```
-
 ## Deploy on Railway (Git)
 
-1. Push this repo to GitHub or Origin.
-2. In Railway: **New project → Deploy from GitHub repo** (or the Origin Git URL).
-3. Railway builds the `Dockerfile`. Start command is `python -m app`, which binds to Railway's `PORT` without shell expansion. A `Procfile` is there if Nixpacks is used instead.
-4. Variables (all optional on first boot):
+Push to `main`. Service `web` builds the Dockerfile. Volume at `/data`.
 
-| Variable | What it does | Local fallback |
-| --- | --- | --- |
-| `PORT` | HTTP port | Railway injects; local `43180` |
-| `DATA_DIR` | JSON state file | `/data` in Docker, `./data` locally |
-| `BACKUP_DIR` | Latest snapshot only | `$DATA_DIR/backups` |
-| `BACKUP_HOUR_UTC` / `BACKUP_MINUTE_UTC` | Daily backup clock | `18` / `30` (00:00 IST) |
-| `SESSION_SECRET` | Signs the user cookie | dev-only string |
-| `BLANCCO_API_KEY` | Live Blancco Management Console | empty → demo simulation |
-| `CORS_ORIGINS` | Allowed origins | `*` |
-
-5. Production mounts a volume at `/data` with `DATA_DIR=/data` so the asset register survives restarts.
-6. Health check path: `/api/health` (includes last backup).
-7. Daily backup runs **in-process** on `web` (same volume, no extra Railway service).
-
-No Railway token is required to develop or to push Git.
-
-## Backups (production)
-
-The live register stays at `/data/circuitloop-state.json`. Backups are a second copy on the **same** `/data` volume. The job never deletes or rewrites the live file.
-
-| | |
+| Variable | What it does |
 | --- | --- |
-| Schedule | Daily at **18:30 UTC** (00:00 IST). Also one catch-up ~20s after process start if there is no backup yet, or the latest is older than 20 hours (so a deploy still creates a copy). |
-| Location | `/data/backups/circuitloop-<UTC stamp>/` (stamp includes microseconds) |
-| Contents | `circuitloop-state.json` (the Field register) plus any other files in `/data` except `backups/` and `*.tmp`. `manifest.json` records rev, size, and sha256. |
-| Rotation | After a **successful** new backup, every previous directory under `/data/backups/` is deleted. **Only the latest backup remains.** If a backup fails, the previous backup is kept and live data is left alone. |
-| Status | `GET https://loop.urbeno.in/api/health` → `backup.latest` |
+| `PORT` | Railway injects |
+| `DATA_DIR` | `/data` |
+| `SESSION_SECRET` | Cookie signing — set a long random string |
+| `COOKIE_SECURE` | Auto-on for `/data`; keep on in production |
+| `BOOTSTRAP_TOKEN` | Optional extra check for first TOTP enroll |
+| `BLANCCO_API_KEY` | Live Blancco only. **Not stored in the register.** |
+| `BLANCCO_ENDPOINT` | Blancco API URL |
+| `CORS_ORIGINS` | Default `https://loop.urbeno.in` |
+| `BACKUP_KEEP_DAILY` / `BACKUP_KEEP_MONTHLY` | Default 30 / 12 |
+| SMTP_* | Email OTP |
 
-Disable with `BACKUP_ENABLED=0`. Override the clock with `BACKUP_HOUR_UTC` / `BACKUP_MINUTE_UTC`.
+On first boot of this version the historical register (demo users, assets, clients, projects, simulated Blancco) is wiped to an empty production register containing only the two users. A cutover marker on `/data` prevents a second wipe.
 
-```bash
-python -m app.backup status   # latest backup
-python -m app.backup run      # take a new copy now (then delete the previous one)
-```
+## Backups
 
-### Restore
-
-This overwrites the live register with the latest backup. Do it only when you intend to roll back. Use a Railway shell / one-off on service `web` so `/data` is mounted (`DATA_DIR=/data`).
-
-```bash
-python -m app.backup status    # confirm backup.latest
-python -m app.backup restore   # atomic replace of /data/circuitloop-state.json
-```
-
-Or copy by hand:
+Daily at 18:30 UTC plus catch-up after start. Keeps **30 daily** and **12 monthly** copies on `/data/backups`. Restore:
 
 ```bash
-cp /data/backups/circuitloop-<stamp>/circuitloop-state.json /data/circuitloop-state.json
+python -m app.backup status
+python -m app.backup restore
 ```
 
-The API reads the file on each request, so a restart is optional. Hard-refresh the Field UI so it pulls the restored `_rev`.
+Health (`GET /api/health`) reports backup policy without filesystem paths.
 
-Do **not** delete `/data/circuitloop-state.json` first. Restore replaces it in place. The backup directory is not deleted by restore.
+## API
 
-## What this slice does
+Session cookie required on every `/api/*` except `/api/health`, `/api/auth/start`, `/api/auth/verify` (and `/api/otp`). `/docs`, `/redoc`, `/openapi.json` are off.
 
-- Serves CircuitLoop Field (CircuitLoop lockup, Scan & Test, projects, register, Blancco, reconciliation, reports, masters, users)
-- `GET`/`PUT /api/state` persists the UI `DB`
-- Daily backup of `/data` on the same volume (keep latest only); restore via `python -m app.backup restore`
-- Click-to-sign-in session cookie
-- Blancco live lookup via the server (demo simulation if no key). **Optional:** submit, verify, and complete never require a Blancco lookup, report, or pass. Super Admins opt a client in under Masters → Clients to enable auto-pull.
-- Device identity is editable on existing assets (make/model, serial, USN, category, project, tag, specs) so testers can fix data-entry errors.
-- **CSV import** of already-tested devices (Excel → Save as CSV). Super Admin: Asset Register / Reports. Field Engineer: Scan & Test, assigned projects only. Preview shows ready / duplicate / error counts, then **adds** rows. Duplicate serials are skipped. The live register is never wiped. Download `circuitloop_asset_import_template.csv` from the import dialog (required columns marked `*`: Serial, Project ID, Category). Test parameters and spec fields are **separate columns** (`Test: poweron`, `Spec: Processor`, …). Also `GET /api/assets/import-template.csv`.
+Per-record writes: `POST/PUT /api/assets`, `/api/clients`, `/api/projects`, `/api/company`, `/api/config`, `/api/sync`. Whole-DB `PUT /api/state` is disabled.
+
+Field Engineers only receive assigned projects/assets. Super Admin sees the full register minus secrets.
 
 ## Not in this slice
 
-- Pickup GPS / seals / signature workflow (not in the field HTML)
+- Pickup GPS / seals / signature workflow
 - Postgres
-- Real Blancco reports when Live mode has no reachable API (falls back to simulation)
-
-## Layout
-
-```
-app/          FastAPI app, JSON store, daily backup, session, Blancco proxy
-static/       circuitloop-field.html (+ persist.js, asset-csv.js, import template)
-data/         created at runtime (gitignored); production is the Railway volume at /data
-data/backups/ latest snapshot only (runtime)
-```
+- Live Blancco reports when `BLANCCO_API_KEY` is unset (lookups fail rather than simulating)

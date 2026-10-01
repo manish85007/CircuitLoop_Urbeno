@@ -1,21 +1,5 @@
 # Security Policy
 
-## Supported Versions
+CircuitLoop production (https://loop.urbeno.in) is limited to **manish@urbeno.in** (Super Admin) and **darshak@urbeno.in** (Field Engineer). Report vulnerabilities to Manish at Urbeno.
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
-
-## Reporting a Vulnerability
-
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Do not store Blancco API keys in the register JSON or the browser. Use `BLANCCO_API_KEY` on the server.

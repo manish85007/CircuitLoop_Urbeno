@@ -14,9 +14,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="icon" href="/static/favicon.svg?v=field2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/favicon.svg?v=field2">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js" integrity="sha384-tOUygabpHGzWXpKv3qJM5f9tSgU6p5f4ooCayrNDwzm3/3/CDMzgHMLQZiMMGghV" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{--navy:#0C1117;--navy2:#131A23;--accent:#00D4AA;--accent2:#00B894;--blue:#0099DD;--amber:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#6C5CE7;--bg:#F5F7FA;--card:#fff;--line:#DEE4ED;--txt:#1A2332;--mut:#5A6B80}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -251,9 +251,9 @@ input[type=checkbox]{width:auto}
     </div>
     <div style="font-size:20px;font-weight:700;margin-bottom:2px">CircuitLoop <span style="color:var(--accent2)">Field</span></div>
     <div class="muted" style="font-size:13px;margin-bottom:18px">IT Asset Disposition &amp; testing console</div>
-    <div class="muted" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sign in as</div>
+    <div class="muted" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sign in</div>
     <div id="loginusers"></div>
-    <div class="muted" style="font-size:11px;margin-top:14px">Demo build — select a user to continue. Super Admin sees everything; Field Engineers see only asset capture and testing for their assigned projects.</div>
+    <div class="muted" style="font-size:11px;margin-top:14px">Restricted to Urbeno accounts. First sign-in enrolls an authenticator app (TOTP). Email OTP is used when SMTP is configured on the server.</div>
   </div>
 </div>
 
@@ -307,29 +307,19 @@ input[type=checkbox]{width:auto}
 <button class="fab hide" id="fab" onclick="cameraScan()" aria-label="Scan barcode">⌁</button>
 <div class="modal-bg" id="modalbg"><div class="modal" id="modalbox"></div></div>
 <div id="toast"></div>
-<script src="/static/asset-csv.js?v=csv2"></script>
+<script src="/static/asset-csv.js?v=prod1"></script>
 <script>
 /* ============================================================
    CircuitLoop Field — data model
    ============================================================ */
 const DB={
-company:{name:'CircuitLoop',brand:'CircuitLoop Field',gstin:'27AABCU9603R1ZM',currency:'INR'},
-users:[
- {id:'U-1',name:'Manish Kumar',email:'manish85007@gmail.com',role:'Super Admin',phone:'+91 98200 10001',active:true},
- {id:'U-2',name:'S. Iyer',email:'s.iyer@urbeno.in',role:'Super Admin',phone:'+91 98200 10002',active:true},
- {id:'U-3',name:'A. Verma',email:'a.verma@urbeno.in',role:'Field Engineer',phone:'+91 98200 10003',active:true},
- {id:'U-4',name:'R. Alvarez',email:'r.alvarez@urbeno.in',role:'Field Engineer',phone:'+91 98200 10004',active:true},
- {id:'U-5',name:'P. Shetty',email:'p.shetty@urbeno.in',role:'Field Engineer',phone:'+91 98200 10005',active:true}
-],
-clients:[
- {id:'CL-1',name:'Meridian Health Systems',gstin:'27AAACM4521H1Z2',pan:'AAACM4521H',contact:'Sarah Okafor',phone:'+91 98220 40147',email:'s.okafor@meridianhealth.in',address:'Meridian House, Baner Road, Pune 411045',blanccoOptIn:true},
- {id:'CL-2',name:'Vantage Financial Group',gstin:'27AAACV8811F1Z9',pan:'AAACV8811F',contact:'Derek Lin',phone:'+91 99300 20198',email:'dlin@vantagefg.in',address:'Vantage Towers, BKC, Mumbai 400051',blanccoOptIn:false},
- {id:'CL-3',name:'Northwind Logistics',gstin:'29AAACN3344K1Z4',pan:'AAACN3344K',contact:'Amanda Reyes',phone:'+91 98450 30122',email:'areyes@northwindlog.in',address:'Whitefield, Bengaluru 560066',blanccoOptIn:false}
-],
+company:{name:'Urbeno Technologies Pvt Ltd',brand:'CircuitLoop Field',gstin:'',currency:'INR'},
+users:[],
+clients:[],
 categories:['Laptop','Desktop','Monitor','Thin Client','Tiny PC','Server','Switch','All-in-One','Tablet','Printer'],
 /* Blancco applies to laptops only, per policy */
 blanccoCategories:['Laptop'],
-blanccoConfig:{endpoint:'https://api.blancco.cloud/v1/erasure-reports',apiKey:'',mode:'Demo (simulated)',autoFetch:true,lastSync:'2026-09-13 18:40'},
+blanccoConfig:{endpoint:'',mode:'Off',autoFetch:true,lastSync:'',hasApiKey:false},
 testParams:{
  'Laptop':[
   {key:'poweron',label:'Powers on / boots to BIOS',critical:true},
@@ -437,23 +427,10 @@ specFields:{
  'Tablet':['Processor','RAM','Storage','Screen Size','Cellular','Year'],
  'Printer':['Type','Mono/Colour','Duplex','Network','Year']
 },
-projects:[
- {id:'PRJ-1001',name:'Meridian Clinic Refresh — Phase 1',clientId:'CL-1',site:'Meridian Clinic, Oak Park, Pune',mode:'Onsite (Client Premises)',
-  start:'2026-09-01',due:'2026-09-20',status:'Active',managerId:'U-2',team:['U-3','U-4'],
-  scope:[{category:'Laptop',expected:40},{category:'Desktop',expected:15},{category:'Monitor',expected:25},{category:'Thin Client',expected:10}],
-  notes:'HIPAA-sensitive. Blancco erasure reports are optional — this client has opted in, so CircuitLoop can auto-pull laptop reports. Submit and complete still work without a Blancco lookup, report, or pass.'},
- {id:'PRJ-1002',name:'Vantage HQ Decommission',clientId:'CL-2',site:'Vantage Towers, BKC, Mumbai',mode:'Onsite (Client Premises)',
-  start:'2026-09-08',due:'2026-09-30',status:'Active',managerId:'U-1',team:['U-3','U-5'],
-  scope:[{category:'Laptop',expected:30},{category:'Server',expected:6},{category:'Switch',expected:8},{category:'Monitor',expected:20}],
-  notes:'Security escort required. Servers to be tested in situ, drives sanitized onsite.'},
- {id:'PRJ-1003',name:'Northwind Depot Q3 Refresh',clientId:'CL-3',site:'Whitefield, Bengaluru',mode:'CircuitLoop Facility',
-  start:'2026-08-10',due:'2026-08-28',status:'Completed',managerId:'U-2',team:['U-4'],
-  scope:[{category:'Laptop',expected:2},{category:'Tiny PC',expected:1}],
-  notes:'Closed. All assets tested and verified.'}
-],
+projects:[],
 assets:[],
 manifests:[],
-seq:{asset:1,usn:50001,project:1004,client:4,user:6,blancco:9001}
+seq:{asset:1,usn:50001,project:1001,client:1,user:3,blancco:1,manifest:1}
 };
 
 /* ============================================================
@@ -461,7 +438,7 @@ seq:{asset:1,usn:50001,project:1004,client:4,user:6,blancco:9001}
    ============================================================ */
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
-const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const today=()=>new Date().toISOString().slice(0,10);
 const stamp=()=>{const d=new Date();return d.toISOString().slice(0,10)+' '+d.toTimeString().slice(0,5);};
 const fmtINR=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
@@ -469,6 +446,7 @@ const userName=id=>{const u=DB.users.find(x=>x.id===id);return u?u.name:'—';};
 const clientName=id=>{const c=DB.clients.find(x=>x.id===id);return c?c.name:'—';};
 const projectById=id=>DB.projects.find(p=>p.id===id);
 const projectName=id=>{const p=projectById(id);return p?p.name:'—';};
+function labelHtml(p){return esc(String((p&&p.label)||'').replace(/&amp;/g,'&'));}
 const paramsFor=cat=>DB.testParams[cat]||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
 const specsFor=cat=>DB.specFields[cat]||['Make/Model detail','Year'];
 const isBlanccoCat=cat=>DB.blanccoCategories.includes(cat);
@@ -481,15 +459,18 @@ function badge(s){
  return '<span class="badge '+(m[s]||'b-gray')+'">'+esc(s)+'</span>';
 }
 function toast(msg){const t=document.createElement('div');t.className='toastmsg';t.textContent=msg;$('#toast').appendChild(t);setTimeout(()=>t.remove(),4000);}
+function persistHint(){if(window.CircuitLoopPersist&&CircuitLoopPersist.soon)CircuitLoopPersist.soon();else if(typeof rerender==='function'){/* persist.js wraps rerender */}}
+function persistFlush(){if(window.CircuitLoopPersist&&CircuitLoopPersist.flush)CircuitLoopPersist.flush();}
 function openModal(html,wide){$('#modalbox').className='modal'+(wide?' wide':'');$('#modalbox').innerHTML=html;$('#modalbg').classList.add('open');}
-function closeModal(){$('#modalbg').classList.remove('open');}
+function closeModal(){persistFlush();$('#modalbg').classList.remove('open');}
 function csvDownload(name,text){
  const a=document.createElement('a');
  a.href=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8;'}));
  a.download=name;a.click();
 }
 function toCSV(cols,rows){
- return [cols.join(',')].concat(rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(','))).join('\n');
+ const safe=v=>{const s=String(v==null?'':v);return /^[=+\-@\t\r]/.test(s)?"'"+s:s;};
+ return [cols.join(',')].concat(rows.map(r=>r.map(v=>'"'+safe(v).replace(/"/g,'""')+'"').join(','))).join('\n');
 }
 function parseCSV(text){return AssetCsv.parseCSV(text);}
 function genUSN(){return 'URB-'+String(DB.seq.usn++).padStart(6,'0');}
@@ -563,10 +544,13 @@ function findAssetForScan(serial,projectId){
 function serialTaken(serial,projectId){
  const s=String(serial||'').trim().toLowerCase();
  if(!s)return false;
- if(parseNoSerialIndex(serial)!=null){
-  return (DB.assets||[]).some(a=>a.projectId===projectId&&String(a.serial||'').toLowerCase()===s);
- }
- return (DB.assets||[]).some(a=>String(a.serial||'').toLowerCase()===s);
+ return (DB.assets||[]).some(a=>{
+  if(String(a.serial||'').toLowerCase()!==s)return false;
+  if(a.projectId===projectId)return true;
+  const p=projectById(a.projectId);
+  const st=p&&p.status;
+  return st!=='Completed'&&st!=='Cancelled';
+ });
 }
 function blanccoOK(a){return !!(a.blancco&&a.blancco.status==='Erased');}
 
@@ -607,15 +591,11 @@ function visibleAssets(){
  return DB.assets.filter(a=>ids.includes(a.projectId));
 }
 function renderLogin(){
- $('#loginusers').innerHTML=DB.users.filter(u=>u.active).map(u=>`
-  <div class="usercard" onclick="login('${u.id}')">
-    <div class="avatar" style="background:${u.role==='Super Admin'?'#8b5cf6':'#3b82f6'}">${esc(u.name.split(' ').map(x=>x[0]).join('').slice(0,2))}</div>
-    <div style="flex:1"><div style="font-weight:600">${esc(u.name)}</div><div class="muted" style="font-size:12px">${esc(u.email)}</div></div>
-    ${badge(u.role)}
-  </div>`).join('');
+ if(window.CircuitLoopPersist&&CircuitLoopPersist.showAuth)CircuitLoopPersist.showAuth();
 }
 function login(uid){
  ME=DB.users.find(u=>u.id===uid);
+ if(!ME){toast('Signed-in account is not in this register');return;}
  $('#loginview').classList.add('hide');
  $('#appview').classList.remove('hide');
  $('#whoami').textContent=ME.name+' · '+ME.role;
@@ -710,36 +690,16 @@ window.addEventListener('orientationchange',()=>setTimeout(applyMobile,250));
    ============================================================ */
 function hashCode(s){let h=0;for(let i=0;i<String(s).length;i++){h=(h<<5)-h+String(s).charCodeAt(i);h|=0;}return h;}
 const BLANCCO={
- /* Live mode issues an authenticated request to <endpoint>?serial=<serial> on the
-    Blancco Management Console API and stores the returned erasure report against
-    the device. Demo mode synthesises an equivalent payload so the workflow can be
-    exercised end to end without credentials. */
- async fetchBySerial(serial,category){
+ async fetchBySerial(serial,category,assetId){
   if(!isBlanccoCat(category))return {ok:false,error:'Blancco integration is restricted to Laptops. '+category+' uses the manual sanitization test parameter.'};
-  const cfg=DB.blanccoConfig;
-  if(cfg.mode==='Live'&&!cfg.apiKey)return {ok:false,error:'Live mode selected but no API key is configured (Masters → Blancco API).'};
-  await new Promise(r=>setTimeout(r,300));
-  if(/FAILSEED/i.test(serial)){
-   return {ok:true,report:{reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Failed',standard:'NIST 800-88 Rev.1 Purge',
-    software:'Blancco Drive Eraser 7.6',date:today(),verified:false,
-    drives:[{model:'Unknown',size:'—',result:'Failed — drive not detected'}],
-    operator:ME?ME.name:'system',source:cfg.mode,raw:'Erasure aborted: target drive reported SMART failure.'}};
-  }
-  const sizes=[['256 GB','NVMe SSD'],['512 GB','NVMe SSD'],['1 TB','NVMe SSD'],['500 GB','SATA HDD']];
-  const sz=sizes[Math.abs(hashCode(serial))%sizes.length];
-  return {ok:true,report:{
-   reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Erased',standard:'NIST 800-88 Rev.1 Purge',
-   software:'Blancco Drive Eraser 7.6',date:today(),verified:true,
-   drives:[{model:sz[1],size:sz[0],result:'Erasure successful — full verification passed'}],
-   operator:ME?ME.name:'system',source:cfg.mode,
-   raw:'All addressable sectors overwritten and verified. Hardware secure-erase issued where supported.'}};
+  return {ok:false,error:'Blancco lookup runs on the server. Sign in and configure BLANCCO_API_KEY.'};
  }
 };
 async function pullBlancco(assetId,silent){
  const a=DB.assets.find(x=>x.id===assetId);
  if(!a)return;
- if(!isBlanccoCat(a.category)){if(!silent)toast('Blancco applies to Laptops only — '+a.category+' uses the manual sanitization check');return;}
- const res=await BLANCCO.fetchBySerial(a.serial,a.category);
+ if(!blanccoEligible(a)){if(!silent)toast('Blancco lookup needs a laptop with a factory serial (NoSerial is skipped)');return;}
+ const res=await BLANCCO.fetchBySerial(a.serial,a.category,a.id);
  if(!res.ok){toast(res.error);return;}
  a.blancco=res.report;
  const sp=paramsFor(a.category).find(p=>p.blancco);
@@ -750,70 +710,12 @@ async function pullBlancco(assetId,silent){
  rerender();
  toast(a.serial+': Blancco '+res.report.reportId+' — '+res.report.status);
 }
-function recomputeGrade(a){const g=gradeAsset(a);a.grade=g.grade;a.gradeReason=g.reason;return g;}
-
-/* ============================================================
-   Demo asset seeding
-   ============================================================ */
-function mkAsset(pid,cat,brand,model,serial,cosmetic,status,tester,specs,overrides){
- const a={id:genAssetId(),usn:genUSN(),projectId:pid,category:cat,brand:brand,model:model,serial:serial,
-  assetTag:'',cosmetic:cosmetic,status:status,tests:{},specs:specs||{},remarks:'',
-  testedBy:status==='Registered'?null:tester,testedAt:status==='Registered'?null:'2026-09-11',
-  verifiedBy:null,verifiedAt:null,blancco:null,
-  history:[{ts:'2026-09-10 09:15',by:userName(tester),ev:'Asset registered via barcode scan'}]};
- if(status!=='Registered'){
-  paramsFor(cat).forEach(p=>{a.tests[p.key]=(overrides&&overrides[p.key])||'Pass';});
-  a.history.push({ts:'2026-09-11 11:30',by:userName(tester),ev:'Level-1 testing completed'});
+function recomputeGrade(a){
+ if(a&&a.status==='Verified'&&a.gradeFrozen){
+  a.grade=a.frozenGrade||a.grade;a.gradeReason=a.frozenGradeReason||a.gradeReason;return {grade:a.grade,reason:a.gradeReason};
  }
- if(status==='Verified'){a.verifiedBy='U-2';a.verifiedAt='2026-09-12';
-  a.history.push({ts:'2026-09-12 16:05',by:'S. Iyer',ev:'Verified by Super Admin'});}
- if(isBlanccoCat(cat)&&status!=='Registered'){
-  a.blancco={reportId:'BL-'+(DB.seq.blancco++),serial:serial,status:'Erased',standard:'NIST 800-88 Rev.1 Purge',
-   software:'Blancco Drive Eraser 7.6',date:'2026-09-10',verified:true,
-   drives:[{model:'NVMe SSD',size:'512 GB',result:'Erasure successful — full verification passed'}],
-   operator:userName(tester),source:'Demo (simulated)',raw:'All addressable sectors overwritten and verified.'};
- }
- recomputeGrade(a);
- DB.assets.push(a);
- return a;
+ const g=gradeAsset(a);a.grade=g.grade;a.gradeReason=g.reason;return g;
 }
-mkAsset('PRJ-1001','Laptop','Dell','Latitude 5540','DL5540-88213','B','Verified','U-3',{Processor:'Intel Core i5-1335U',Generation:'13th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'15.6"',Year:'2023'});
-mkAsset('PRJ-1001','Laptop','Lenovo','ThinkPad T14 G4','LT14-30291','A','Verified','U-3',{Processor:'Intel Core i7-1355U',Generation:'13th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'14"',Year:'2023'});
-mkAsset('PRJ-1001','Laptop','HP','ProBook 450 G8','PB450-20115','C','Tested','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'},{battery:'Fail',webcam:'Fail'});
-mkAsset('PRJ-1001','Laptop','Dell','Latitude 7420','DL7420-61008','B','Tested','U-3',{Processor:'Intel Core i7-1185G7',Generation:'11th Gen',RAM:'16 GB',Storage:'512 GB NVMe','Screen Size':'14"',Year:'2021'});
-mkAsset('PRJ-1001','Desktop','HP','EliteDesk 800 G9','HP800-11750','B','Verified','U-4',{Processor:'Intel Core i7-12700',Generation:'12th Gen',RAM:'16 GB',Storage:'512 GB SSD','Form Factor':'SFF',Year:'2022'});
-mkAsset('PRJ-1001','Desktop','Dell','OptiPlex 7010','OP7010-3312','C','Tested','U-4',{Processor:'Intel Core i5-13500',Generation:'13th Gen',RAM:'8 GB',Storage:'256 GB SSD','Form Factor':'MT',Year:'2023'},{gpu:'Fail'});
-mkAsset('PRJ-1001','Monitor','Dell','P2422H','MON-55910','A','Verified','U-3',{'Screen Size':'24"','Panel Type':'IPS',Resolution:'1920x1080',Year:'2022'});
-mkAsset('PRJ-1001','Monitor','HP','E24 G5','MON-88123','B','Tested','U-3',{'Screen Size':'24"','Panel Type':'IPS',Resolution:'1920x1080',Year:'2021'},{stand:'Fail',cables:'Fail'});
-mkAsset('PRJ-1001','Thin Client','Dell','Wyse 5070','WY5070-2201','B','Registered','U-4',{});
-mkAsset('PRJ-1001','Laptop','Acer','TravelMate P4','TMP4-77001','B','Registered','U-3',{});
-mkAsset('PRJ-1002','Laptop','Apple','MacBook Pro 14 M2','MBP14-77821','A','Tested','U-5',{Processor:'Apple M2 Pro',Generation:'M2',RAM:'16 GB',Storage:'512 GB SSD','Screen Size':'14.2"',Year:'2023'});
-mkAsset('PRJ-1002','Server','HPE','ProLiant DL380 G10','DL380-55671','B','Tested','U-5',{'Form Factor':'2U Rack',Processor:'2x Xeon Gold 5218','CPU Count':'2',RAM:'256 GB ECC','Drive Config':'8x 1.8TB SAS',RAID:'P408i-a',PSU:'Dual 800W',Year:'2019'});
-mkAsset('PRJ-1002','Server','Dell','PowerEdge R650','PE650-00412','B','Registered','U-5',{});
-mkAsset('PRJ-1002','Switch','Cisco','Catalyst 9300','CAT93-00291','A','Tested','U-3',{'Port Count':'48',Speed:'1G/10G uplink',PoE:'PoE+',Stackable:'Yes',Firmware:'IOS-XE 17.9',Year:'2020'});
-mkAsset('PRJ-1002','Switch','Cisco','Catalyst 2960X','CAT29-11832','C','Tested','U-3',{'Port Count':'24',Speed:'1G',PoE:'No',Stackable:'Yes',Firmware:'IOS 15.2',Year:'2016'},{poe:'N/A',fans:'Fail',stack:'Fail'});
-mkAsset('PRJ-1002','Monitor','LG','24MK600','LG24-55521','B','Registered','U-5',{});
-mkAsset('PRJ-1003','Laptop','Lenovo','ThinkPad E15','LE15-11002','B','Verified','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'});
-mkAsset('PRJ-1003','Laptop','Lenovo','ThinkPad E15','LE15-11003','C','Verified','U-4',{Processor:'Intel Core i5-1135G7',Generation:'11th Gen',RAM:'8 GB',Storage:'256 GB SSD','Screen Size':'15.6"',Year:'2021'});
-mkAsset('PRJ-1003','Tiny PC','Intel','NUC 11 Pro','NUC11-9087','A','Verified','U-4',{Processor:'Intel Core i5-1145G7',Generation:'11th Gen',RAM:'16 GB',Storage:'512 GB NVMe',Year:'2021'});
-(function(){
- const rej=DB.assets.find(a=>a.serial==='OP7010-3312');
- rej.status='Rejected';rej.rejectNote='Graphics output failed — re-seat GPU and retest before verification.';
- rej.history.push({ts:'2026-09-12 16:20',by:'S. Iyer',ev:'Rejected at verification: graphics output failed'});
-})();
-DB.manifests.push({id:'MF-1',projectId:'PRJ-1001',uploaded:'2026-09-12',by:'U-1',file:'meridian_received_manifest.csv',
- rows:[{serial:'DL5540-88213',category:'Laptop',brand:'Dell',model:'Latitude 5540'},
-  {serial:'LT14-30291',category:'Laptop',brand:'Lenovo',model:'ThinkPad T14 G4'},
-  {serial:'PB450-20115',category:'Laptop',brand:'HP',model:'ProBook 450 G8'},
-  {serial:'DL7420-61008',category:'Laptop',brand:'Dell',model:'Latitude 7420'},
-  {serial:'HP800-11750',category:'Desktop',brand:'HP',model:'EliteDesk 800 G9'},
-  {serial:'OP7010-3312',category:'Desktop',brand:'Dell',model:'OptiPlex 7010'},
-  {serial:'MON-55910',category:'Monitor',brand:'Dell',model:'P2422H'},
-  {serial:'MON-88123',category:'Monitor',brand:'HP',model:'E24 G5'},
-  {serial:'WY5070-2201',category:'Thin Client',brand:'Dell',model:'Wyse 5070'},
-  {serial:'TMP4-77001',category:'Laptop',brand:'Acer',model:'TravelMate P4'},
-  {serial:'MON-99001',category:'Monitor',brand:'Dell',model:'P2419H'},
-  {serial:'WY5070-2202',category:'Thin Client',brand:'Dell',model:'Wyse 5070'}]});
 
 /* ============================================================
    SCAN & TEST  (Field Engineer + Super Admin)
@@ -832,10 +734,7 @@ render(){
  const list=TEST_FILTER==='open'?open:TEST_FILTER==='done'?done:mine;
  const rows=list.slice().reverse().map(a=>{
   const pr=testProgress(a);
-  return `<tr>
-   <td><b>${esc(a.serial)}</b><div class="muted" style="font-size:11px">${esc(a.usn)}</div></td>
-   <td>${esc(a.category)}<div class="muted" style="font-size:11px">${esc(a.brand)} ${esc(a.model)}</div></td>
-   <td>${badge(a.status)}${a.status==='Rejected'?'<div class="muted" style="font-size:11px;max-width:200px">'+esc(a.rejectNote||'')+'</div>':''}</td>
+  return `<tr data-id="${esc(a.id)}">
    <td style="min-width:120px"><div class="progressbar"><div style="width:${pr.pct}%"></div></div><span class="muted" style="font-size:11px">${pr.done}/${pr.total}</span></td>
    <td>${a.grade?badge(a.grade):'—'}</td>
    <td>${isBlanccoCat(a.category)?(a.blancco?badge(a.blancco.status):'<span class="muted" style="font-size:11px">not pulled</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
@@ -1143,20 +1042,21 @@ function openTest(id){
  const a=DB.assets.find(x=>x.id===id);
  if(!a)return;
  TESTING_ID=id;
- if(a.status==='Registered'){a.status='In Testing';a.history.push({ts:stamp(),by:ME.name,ev:'Testing started'});}
+ const locked=a.status==='Verified';
+ if(a.status==='Registered'){a.status='In Testing';a.history=a.history||[];a.history.push({ts:stamp(),by:ME.name,ev:'Testing started'});persistHint();}
  const params=paramsFor(a.category);
  const rows=params.map(p=>{
   const v=a.tests[p.key]||'';
   const isB=p.blancco&&blanccoEligible(a);
   return `<div class="testrow">
-   <div><div class="nm">${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</div>
+   <div><div class="nm">${labelHtml(p)}${p.critical?' <span class="cr">CRITICAL</span>':''}</div>
     ${isB?`<div class="muted" style="font-size:11px">Blancco is optional. ${a.blancco?'Linked report '+esc(a.blancco.reportId)+' ('+esc(a.blancco.status)+') — you can still override Pass / Fail / N/A.':'No report linked — record sanitization by hand, or pull a report if this client uses Blancco.'}</div>`:''}
     ${p.measure?`<input style="max-width:180px;margin-top:5px;padding:5px 8px;font-size:12px" placeholder="${esc(p.measure)}" value="${esc((a.measures||{})[p.key]||'')}" oninput="setMeasure('${p.key}',this.value)">`:''}
    </div>
    <div class="seg">
-    <button class="${v==='Pass'?'on-pass':''}" onclick="setTest('${p.key}','Pass')">Pass</button>
-    <button class="${v==='Fail'?'on-fail':''}" onclick="setTest('${p.key}','Fail')">Fail</button>
-    <button class="${v==='N/A'?'on-na':''}" onclick="setTest('${p.key}','N/A')">N/A</button>
+    <button type="button" data-act="setTest" data-key="${esc(p.key)}" data-val="Pass" class="${v==='Pass'?'on-pass':''}">Pass</button>
+    <button type="button" data-act="setTest" data-key="${esc(p.key)}" data-val="Fail" class="${v==='Fail'?'on-fail':''}">Fail</button>
+    <button type="button" data-act="setTest" data-key="${esc(p.key)}" data-val="N/A" class="${v==='N/A'?'on-na':''}">N/A</button>
    </div></div>`;
  }).join('');
  const g=gradeAsset(a);
@@ -1171,6 +1071,7 @@ function openTest(id){
    </div>
    <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''} · <span class="linklike" onclick="editAssetDetails('${a.id}','openTest')">Edit all device details</span></div>
    ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by Super Admin:</b> ${esc(a.rejectNote||'')}</div>`:''}
+   ${a.status==='Verified'?`<div class="okbox">Verified and locked (grade ${esc(a.grade||'')}). Super Admin can reopen for re-verification; the grade stays frozen until verified again.</div>`:''}
    ${isNoSerialValue(a.serial)
      ? `<div class="info">No factory serial — physical / no-power check (<b>${esc(a.serial)}</b>). Record cosmetic grade and every parameter. Mark <b>Powers on</b> Fail if the unit has no power. Blancco is not required to submit.</div>`
      : blanccoEligible(a)?(a.blancco
@@ -1212,32 +1113,49 @@ function openTest(id){
    <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
    <button class="btn" onclick="editAssetDetails('${a.id}','openTest')">Edit details</button>
    <button class="btn" onclick="closeModal();rerender()">Close</button>
+   ${a.status==='Verified'&&canEdit()?`<button class="btn" onclick="reopenVerified('${a.id}')">Reopen for re-verification</button>`:''}
    ${a.status==='Tested'||a.status==='Verified'?'':`<button class="btn btn-p" onclick="submitTest('${a.id}')">Submit for verification</button>`}
  </div>`,true);
 }
 function setTest(key,val){
  const a=DB.assets.find(x=>x.id===TESTING_ID);
+ if(!a)return;
+ if(a.status==='Verified'){toast('Verified assets are locked. Reopen for re-verification to edit.');return;}
  a.tests[key]=a.tests[key]===val?'':val;
  recomputeGrade(a);
+ persistHint();
  openTest(a.id);
 }
 function markAllPass(id){
  const a=DB.assets.find(x=>x.id===id);
+ if(a.status==='Verified'){toast('Verified assets are locked.');return;}
  paramsFor(a.category).forEach(p=>{a.tests[p.key]='Pass';});
- recomputeGrade(a);openTest(a.id);
+ recomputeGrade(a);persistHint();openTest(a.id);
  toast('All parameters marked Pass. Change any that failed.');
 }
 function setMeasure(key,val){
  const a=DB.assets.find(x=>x.id===TESTING_ID);
- a.measures=a.measures||{};a.measures[key]=val;
+ if(!a||a.status==='Verified')return;
+ a.measures=a.measures||{};a.measures[key]=val;persistHint();
 }
 function setCosmetic(v){
  const a=DB.assets.find(x=>x.id===TESTING_ID);
- a.cosmetic=v;recomputeGrade(a);openTest(a.id);
+ if(!a||a.status==='Verified'){toast('Verified assets are locked.');return;}
+ a.cosmetic=v;recomputeGrade(a);persistHint();openTest(a.id);
 }
 function setRemarks(v){
  const a=DB.assets.find(x=>x.id===TESTING_ID);
- a.remarks=String(v||'').slice(0,500);
+ if(!a||a.status==='Verified')return;
+ a.remarks=String(v||'').slice(0,500);persistHint();
+}
+function reopenVerified(id){
+ if(!canEdit()){toast('Only a Super Admin can reopen a verified asset.');return;}
+ const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;a.gradeFrozen=true;
+ a.status='In Testing';a.verifiedBy=null;a.verifiedAt=null;
+ a.history=a.history||[];
+ a.history.push({ts:stamp(),by:ME.name,ev:'Reopened for re-verification — grade '+a.grade+' frozen until re-verify'});
+ persistHint();openTest(id);toast('Reopened. Edit, then verify again. Previous grade stays until re-verification.');
 }
 function editSpecs(id){
  const a=DB.assets.find(x=>x.id===id);
@@ -1279,10 +1197,14 @@ function patchMakeModel(id,key,val){
 function serialTakenByOther(serial,projectId,exceptId){
  const s=String(serial||'').trim().toLowerCase();
  if(!s)return false;
- if(parseNoSerialIndex(serial)!=null){
-  return (DB.assets||[]).some(a=>a.id!==exceptId&&a.projectId===projectId&&String(a.serial||'').toLowerCase()===s);
- }
- return (DB.assets||[]).some(a=>a.id!==exceptId&&String(a.serial||'').toLowerCase()===s);
+ return (DB.assets||[]).some(a=>{
+  if(a.id===exceptId)return false;
+  if(String(a.serial||'').toLowerCase()!==s)return false;
+  if(a.projectId===projectId)return true;
+  const p=projectById(a.projectId);
+  const st=p&&p.status;
+  return st!=='Completed'&&st!=='Cancelled';
+ });
 }
 function usnTakenByOther(usn,exceptId){
  const s=String(usn||'').trim().toLowerCase();
@@ -1332,7 +1254,12 @@ function refreshEditSpecs(){
   specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="eds_${i}" data-f="${esc(f)}" value="${esc(current[f]||'')}"></div>`).join('')+'</div>';
 }
 function saveAssetDetails(id,backFn){
- const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ let a=DB.assets.find(x=>x.id===id);if(!a)return;
+ if(a.status==='Verified'){
+  if(!canEdit()){toast('Verified assets are locked.');return;}
+  reopenVerified(id);
+  a=DB.assets.find(x=>x.id===id);
+ }
  const serial=String($('#ed_serial').value||'').trim();
  const usn=String($('#ed_usn').value||'').trim();
  if(!serial){toast('Serial number is required');return;}
@@ -1632,7 +1559,7 @@ render(){
  if(REG.category!=='all')list=list.filter(a=>a.category===REG.category);
  if(REG.status!=='all')list=list.filter(a=>a.status===REG.status);
  if(REG.q){const q=REG.q.toLowerCase();list=list.filter(a=>(a.serial+' '+a.usn+' '+a.brand+' '+a.model+' '+a.assetTag).toLowerCase().includes(q));}
- const rows=list.slice().reverse().map(a=>`<tr>
+ const rows=list.slice().reverse().map(a=>`<tr data-id="${esc(a.id)}">
    <td><span class="linklike" onclick="assetDetail('${a.id}')"><b>${esc(a.serial)}</b></span>
      <div class="muted" style="font-size:11px">${esc(a.usn)}${a.assetTag?' · '+esc(a.assetTag):''}</div></td>
    <td>${esc(a.category)}<div class="muted" style="font-size:11px">${esc(a.brand)} ${esc(a.model)}</div></td>
@@ -1680,7 +1607,7 @@ function assetDetail(id){
  const a=DB.assets.find(x=>x.id===id);
  const params=paramsFor(a.category);
  const g=gradeAsset(a);
- const trows=params.map(p=>`<tr><td>${p.label}${p.critical?' <span class="cr">CRITICAL</span>':''}</td>
+ const trows=params.map(p=>`<tr><td>${labelHtml(p)}${p.critical?' <span class="cr">CRITICAL</span>':''}</td>
   <td>${a.tests[p.key]?badge(a.tests[p.key]):'<span class="muted">not recorded</span>'}</td>
   <td>${esc((a.measures||{})[p.key]||'')}</td></tr>`).join('');
  openModal(`
@@ -1720,6 +1647,7 @@ function verifyAsset(id){
  const a=DB.assets.find(x=>x.id===id);
  if(!isTestComplete(a)){toast('Cannot verify '+a.serial+': test parameters incomplete');return;}
  a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();a.rejectNote='';
+ a.gradeFrozen=true;a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;
  a.history.push({ts:stamp(),by:ME.name,ev:'Verified by Super Admin — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:'')});
  closeModal();rerender();toast(a.serial+' verified (grade '+a.grade+')');
 }
@@ -1741,11 +1669,19 @@ function saveReject(id){
 }
 function bulkVerify(){
  let n=0,skip=0;
+ const shown=new Set();
+ $$('#regbody tr').forEach(tr=>{
+  if(tr.style.display==='none')return;
+  if(tr.dataset.id)shown.add(tr.dataset.id);
+ });
  DB.assets.filter(a=>a.status==='Tested').forEach(a=>{
+  if(shown.size&&!shown.has(a.id))return;
   if(REG.project!=='all'&&a.projectId!==REG.project)return;
   if(REG.category!=='all'&&a.category!==REG.category)return;
+  if(REG.status!=='all'&&a.status!==REG.status)return;
   if(!isTestComplete(a)){skip++;return;}
   a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();
+  a.gradeFrozen=true;a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;
   a.history.push({ts:stamp(),by:ME.name,ev:'Verified (bulk) — grade '+a.grade});n++;
  });
  rerender();
@@ -1787,14 +1723,14 @@ render(){
    <button class="btn btn-sm" onclick="saveBlanccoCfg()">Save</button></div>
   <div class="card-b">
    <div class="frow">
-    <div><label class="f">API endpoint</label><input id="bc_ep" value="${esc(cfg.endpoint)}"></div>
-    <div><label class="f">Mode</label><select id="bc_mode"><option ${cfg.mode.indexOf('Demo')===0?'selected':''}>Demo (simulated)</option><option ${cfg.mode==='Live'?'selected':''}>Live</option></select></div>
+    <div><label class="f">API endpoint</label><input id="bc_ep" value="${esc(cfg.endpoint||'')}"></div>
+    <div><label class="f">Mode</label><select id="bc_mode"><option value="Off" ${cfg.mode==='Off'?'selected':''}>Off</option><option value="Live" ${cfg.mode==='Live'?'selected':''}>Live (server API key)</option></select></div>
    </div>
    <div class="frow">
-    <div><label class="f">API key / token</label><input id="bc_key" type="password" value="${esc(cfg.apiKey)}" placeholder="Paste the Management Console API token"></div>
+    <div><label class="f">API key</label><input value="${cfg.hasApiKey?'Configured on the server (BLANCCO_API_KEY)':'Not set — lookups will fail until BLANCCO_API_KEY is configured'}" disabled></div>
     <div><label class="f">Auto-pull on registration</label><select id="bc_auto"><option value="1" ${cfg.autoFetch?'selected':''}>Yes — for clients that opt in, fetch when a laptop is scanned</option><option value="0" ${cfg.autoFetch?'':'selected'}>No — pull manually</option></select></div>
    </div>
-   <div class="muted" style="font-size:12px;margin-top:10px">Last sync ${esc(cfg.lastSync)} · reports are stored against each device and included in project reporting. In Demo mode the app synthesises a valid report so the flow can be exercised without credentials; append <span class="tag">FAILSEED</span> to a serial to simulate a failed erasure.</div>
+   <div class="muted" style="font-size:12px;margin-top:10px">Last sync ${esc(cfg.lastSync||'—')}. Only live Blancco API reports are stored. The API key is never saved in the register. Simulated / demo reports are disabled.</div>
    <div class="flex" style="margin-top:12px">
      <button class="btn btn-p" onclick="syncAllBlancco()">⟳ Pull reports for all laptops missing one</button>
      <button class="btn" onclick="exportBlanccoCSV()">⬇ Erasure compliance CSV</button>
@@ -1806,17 +1742,18 @@ render(){
 }};
 function saveBlanccoCfg(){
  const c=DB.blanccoConfig;
- c.endpoint=$('#bc_ep').value;c.mode=$('#bc_mode').value;c.apiKey=$('#bc_key').value;
+ c.endpoint=$('#bc_ep').value;c.mode=$('#bc_mode').value;
+ delete c.apiKey;
  c.autoFetch=$('#bc_auto').value==='1';c.lastSync=stamp();
- rerender();toast('Blancco configuration saved ('+c.mode+')');
+ rerender();toast('Blancco configuration saved ('+c.mode+'). API key stays on the server.');
 }
 async function syncAllBlancco(){
- const targets=DB.assets.filter(a=>isBlanccoCat(a.category)&&!a.blancco);
- if(!targets.length){toast('Every laptop already has a linked erasure report');return;}
+ const targets=DB.assets.filter(a=>blanccoEligible(a)&&!a.blancco);
+ if(!targets.length){toast('Every eligible laptop already has a linked erasure report');return;}
  toast('Pulling '+targets.length+' report(s) from Blancco…');
  for(const a of targets){await pullBlancco(a.id,true);}
  DB.blanccoConfig.lastSync=stamp();
- rerender();toast('Sync complete — '+targets.length+' report(s) stored');
+ rerender();toast('Sync complete — '+targets.length+' lookup(s) attempted');
 }
 function exportBlanccoCSV(){
  const laps=DB.assets.filter(a=>isBlanccoCat(a.category));
@@ -1832,7 +1769,7 @@ function exportBlanccoCSV(){
 /* ============================================================
    RECONCILIATION — tested vs received
    ============================================================ */
-let RECON_PROJECT='PRJ-1001';
+let RECON_PROJECT='';
 VIEWS.reconcile={title:'Reconciliation',crumb:'Upload the received manifest and match it against tested assets',
 render(){
  const p=projectById(RECON_PROJECT)||DB.projects[0];
@@ -1998,14 +1935,20 @@ render(){
 after(){
  if(typeof Chart==='undefined')return;
  const assets=visibleAssets();
+ window._clCharts=window._clCharts||{};
+ function paint(id,cfg){
+  const canvas=$('#'+id);if(!canvas)return;
+  if(window._clCharts[id]){window._clCharts[id].destroy();window._clCharts[id]=null;}
+  window._clCharts[id]=new Chart(canvas,cfg);
+ }
  const stat={};['Registered','In Testing','Tested','Verified','Rejected'].forEach(s=>stat[s]=assets.filter(a=>a.status===s).length);
- new Chart($('#chStatus'),{type:'doughnut',data:{labels:Object.keys(stat),datasets:[{data:Object.values(stat),
+ paint('chStatus',{type:'doughnut',data:{labels:Object.keys(stat),datasets:[{data:Object.values(stat),
   backgroundColor:['#94a3b8','#f59e0b','#8b5cf6','#22c55e','#ef4444']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
  const gr={A:0,B:0,C:0,D:0};assets.forEach(a=>{if(a.grade&&['Tested','Verified','Rejected'].includes(a.status))gr[a.grade]=(gr[a.grade]||0)+1;});
- new Chart($('#chGrade'),{type:'bar',data:{labels:['A','B','C','D'],datasets:[{label:'Assets',data:[gr.A,gr.B,gr.C,gr.D],
+ paint('chGrade',{type:'bar',data:{labels:['A','B','C','D'],datasets:[{label:'Assets',data:[gr.A,gr.B,gr.C,gr.D],
   backgroundColor:['#22c55e','#3b82f6','#f59e0b','#ef4444'],borderRadius:6}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
  const cats={};assets.forEach(a=>cats[a.category]=(cats[a.category]||0)+1);
- new Chart($('#chCat'),{type:'bar',data:{labels:Object.keys(cats),datasets:[{label:'Assets',data:Object.values(cats),
+ paint('chCat',{type:'bar',data:{labels:Object.keys(cats),datasets:[{label:'Assets',data:Object.values(cats),
   backgroundColor:'#0d9488',borderRadius:6}]},options:{maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
 }};
 
@@ -2285,7 +2228,7 @@ function saveClient(id){
 }
 function saveCompany(){
  DB.company.name=$('#co_name').value;DB.company.brand=$('#co_brand').value;DB.company.gstin=$('#co_gst').value;
- toast('Company profile saved');
+ rerender();toast('Company profile saved');
 }
 
 /* ============================================================
@@ -2310,27 +2253,29 @@ render(){
   <div class="kpi teal"><div class="lbl">Active</div><div class="val">${DB.users.filter(u=>u.active).length}</div></div>
  </div>
  <div class="info"><b>Roles:</b> Field Engineers see only the dashboard for their own projects, the scan &amp; test screen, and their assigned project list — they can add assets and record test parameters, nothing else. Super Admins have every module, including verification, masters, Blancco configuration and reports.</div>
- <div class="card"><div class="card-h"><h3>All users</h3><button class="btn btn-p btn-sm" onclick="editUser()">+ New user</button></div>
+ <div class="card"><div class="card-h"><h3>All users</h3></div>
   <div class="tblwrap"><table><thead><tr><th>User</th><th>Role</th><th>Phone</th><th>Projects</th><th>Assets captured</th><th>State</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }};
 function editUser(id){
  const u=id?DB.users.find(x=>x.id===id):null;
+ if(!u){toast('Production has two accounts only — manish@urbeno.in and darshak@urbeno.in');return;}
  openModal(`<div class="modal-h"><h3>${u?'Edit':'New'} user</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
   <div class="frow"><div><label class="f">Full name</label><input id="us_name" value="${u?esc(u.name):''}"></div>
    <div><label class="f">Role</label><select id="us_role"><option ${u&&u.role==='Super Admin'?'selected':''}>Super Admin</option><option ${!u||u.role==='Field Engineer'?'selected':''}>Field Engineer</option></select></div></div>
   <div class="frow"><div><label class="f">Email</label><input id="us_email" value="${u?esc(u.email):''}"></div>
    <div><label class="f">Phone</label><input id="us_phone" value="${u?esc(u.phone||''):''}"></div></div>
-  <div class="muted" style="font-size:12px;margin-top:10px">This demo signs in by selecting a user. A production deployment would authenticate against your identity provider and map these same two roles.</div>
+  <div class="muted" style="font-size:12px;margin-top:10px">Production login is ${esc(u?u.email:'the two Urbeno accounts')} with authenticator (TOTP). Roles are assigned on the server. New users cannot be added here.</div>
  </div>
  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
   <button class="btn btn-p" onclick="saveUser(${u?"'"+u.id+"'":'null'})">Save</button></div>`);
 }
 function saveUser(id){
  const name=$('#us_name').value.trim();if(!name){toast('Name is required');return;}
- const data={name:name,role:$('#us_role').value,email:$('#us_email').value||'—',phone:$('#us_phone').value||'—'};
- if(id){Object.assign(DB.users.find(x=>x.id===id),data);if(ME.id===id){ME=DB.users.find(x=>x.id===id);$('#whoami').textContent=ME.name+' · '+ME.role;buildNav();}}
- else DB.users.push(Object.assign({id:'U-'+(DB.seq.user++),active:true},data));
+ if(!id){toast('New users cannot be added');return;}
+ const u=DB.users.find(x=>x.id===id);if(!u)return;
+ u.name=name;u.phone=$('#us_phone').value||'';
+ if(ME.id===id){$('#whoami').textContent=ME.name+' · '+ME.role;}
  closeModal();rerender();toast('User saved: '+name);
 }
 function toggleUser(id){
@@ -2438,8 +2383,14 @@ function applyAssetImport(){
 /* ============================================================
    Boot
    ============================================================ */
-document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
+document.addEventListener('click',e=>{
+ if(e.target.id==='modalbg'){closeModal();if(CURRENT)rerender();}
+ const btn=e.target.closest('[data-act]');
+ if(!btn)return;
+ const act=btn.getAttribute('data-act');
+ if(act==='setTest')setTest(btn.getAttribute('data-key'),btn.getAttribute('data-val'));
+});
 </script>
-<script src="/static/persist.js?v=csv2"></script>
+<script src="/static/persist.js?v=prod1"></script>
 </body>
 </html>

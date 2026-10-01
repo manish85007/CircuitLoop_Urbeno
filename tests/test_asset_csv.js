@@ -98,7 +98,8 @@ assert.strictEqual(previewOk.ready.length, 1, JSON.stringify(previewOk));
 assert.strictEqual(previewOk.skipped.length, 0);
 assert.strictEqual(previewOk.errors.length, 0);
 assert.strictEqual(previewOk.ready[0].asset.serial, "NEW-SN-001");
-assert.strictEqual(previewOk.ready[0].asset.status, "Tested");
+assert.strictEqual(previewOk.ready[0].asset.status, "In Testing");
+assert.strictEqual(previewOk.ready[0].asset.blancco, null);
 assert.strictEqual(previewOk.ready[0].asset.tests.poweron, "Pass");
 assert.strictEqual(previewOk.ready[0].asset.tests.display, "Fail");
 assert.strictEqual(previewOk.ready[0].asset.specs.Processor, "Intel Core i7");
@@ -139,7 +140,21 @@ assert.match(fieldBlocked.errors[0].message, /not assigned/i);
 
 const fieldOk = AssetCsv.preview(csv([baseRow({ Status: "Verified" })]), fieldCtx);
 assert.strictEqual(fieldOk.ready.length, 1);
-assert.strictEqual(fieldOk.ready[0].status, "Tested", "Field cannot import as Verified");
+assert.strictEqual(fieldOk.ready[0].status, "In Testing", "Field cannot import as Verified; missing tests stay blank");
+
+const gradeA = AssetCsv.preview(csv([baseRow({ Cosmetic: "A", "Test: poweron": "Pass", "Test: display": "Pass", "Test: keyboard": "Pass", "Test: touchpad": "Pass", "Test: battery": "Pass", "Test: ports": "Pass", "Test: webcam": "Pass", "Test: audio": "Pass", "Test: wifi": "Pass", "Test: charger": "Pass", "Test: biosclear": "Pass", "Test: sanitize": "Pass" })]), ctx);
+assert.strictEqual(gradeA.ready[0].asset.cosmetic, "A");
+assert.strictEqual(gradeA.ready[0].asset.grade, "A");
+assert.strictEqual(gradeA.ready[0].asset.blancco, null);
+
+const returning = AssetCsv.preview(
+  csv([baseRow({ "Serial*": "DL5540-88213", "Project ID*": "PRJ-1002" })]),
+  ctx
+);
+assert.strictEqual(returning.ready.length, 1, "same serial allowed on a different project");
+
+const blanccoCsv = AssetCsv.preview(csv([baseRow({ "Blancco Status": "Erased", "Blancco Report": "BL-FAKE" })]), ctx);
+assert.strictEqual(blanccoCsv.ready[0].asset.blancco, null);
 
 const bom = "\uFEFF" + csv([baseRow({ "Serial*": "BOM-1" })]);
 const bomPrev = AssetCsv.preview(bom, ctx);

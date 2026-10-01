@@ -224,7 +224,9 @@
   const TEMPLATE_ROWS = buildExampleRows();
 
   function csvEscape(v) {
-    return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const s = String(v == null ? "" : v);
+    const safe = /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+    return '"' + safe.replace(/"/g, '""') + '"';
   }
 
   function toCSV(cols, rows) {
@@ -325,12 +327,11 @@
   function serialTaken(assets, serial, projectId) {
     const s = String(serial || "").trim().toLowerCase();
     if (!s) return false;
-    if (parseNoSerialIndex(serial) != null) {
-      return (assets || []).some(
-        (a) => a.projectId === projectId && String(a.serial || "").toLowerCase() === s
-      );
-    }
-    return (assets || []).some((a) => String(a.serial || "").toLowerCase() === s);
+    return (assets || []).some((a) => {
+      if (String(a.serial || "").toLowerCase() !== s) return false;
+      if (a.projectId === projectId) return true;
+      return false;
+    });
   }
 
   function usnTaken(assets, usn) {
@@ -481,10 +482,6 @@
   }
 
   function fillTestsIfTested(tests, cat, ctx, status) {
-    if (!["Tested", "Verified", "Rejected"].includes(status)) return tests;
-    paramsFor(ctx, cat).forEach((p) => {
-      if (!tests[p.key]) tests[p.key] = "Pass";
-    });
     return tests;
   }
 
@@ -499,7 +496,7 @@
         reason: "Critical failure: " + critFails.map((p) => String(p.label).replace(/&amp;/g, "&")).join(", "),
       };
     }
-    const idx = { A: 0, B: 1, C: 2, D: 3 }[cosmetic] || 1;
+    const idx = { A: 0, B: 1, C: 2, D: 3 }[cosmetic] ?? 1;
     const demote = fails.length >= 3 ? 2 : fails.length >= 1 ? 1 : 0;
     const grade = "ABCD"[Math.min(3, idx + demote)];
     return {
@@ -656,8 +653,14 @@
       const parsed = parseTests(row, category, ctx);
       const tests = fillTestsIfTested(parsed.tests, category, ctx, status);
       const specs = parseSpecsFromRow(row, category, ctx);
-      const tester = matchUser(ctx.users, col(row, "tested_by")) || me;
-      const verifier = matchUser(ctx.users, col(row, "verified_by"));
+      const tester = me;
+      let statusOut = status;
+      const params = paramsFor(ctx, category);
+      const allPresent = params.every((p) => tests[p.key]);
+      if (["Tested", "Verified", "Rejected"].includes(statusOut) && !allPresent) {
+        statusOut = "In Testing";
+      }
+      const verifier = null;
       const id = nextAssetId(seq, working);
       bumpFromAssetId(seq, id);
 
@@ -671,16 +674,16 @@
         serial: serial,
         assetTag: col(row, "tag") || "",
         cosmetic: COSMETIC.indexOf(cosmetic) >= 0 ? cosmetic : "B",
-        status: status,
+        status: statusOut,
         tests: tests,
         measures: parsed.measures,
         specs: specs,
         remarks: col(row, "remarks").slice(0, 500),
         rejectNote: col(row, "reject_note") || "",
-        testedBy: status === "Registered" ? null : tester.id,
-        testedAt: status === "Registered" ? null : col(row, "tested_on") || todayStamp(),
-        verifiedBy: status === "Verified" ? (verifier ? verifier.id : me.id) : null,
-        verifiedAt: status === "Verified" ? col(row, "verified_on") || todayStamp() : null,
+        testedBy: statusOut === "Registered" ? null : tester.id,
+        testedAt: statusOut === "Registered" ? null : col(row, "tested_on") || todayStamp(),
+        verifiedBy: null,
+        verifiedAt: null,
         blancco: null,
         history: [
           {
@@ -688,31 +691,20 @@
             by: me.name,
             ev:
               "Imported from CSV as " +
-              status +
+              statusOut +
+              " by " +
+              me.name +
               (isNoSerialValue(serial) ? " (" + serial + ", no factory serial)" : " (" + serial + ")"),
           },
         ],
       };
 
-      const bStatus = col(row, "blancco_status");
-      const bReport = col(row, "blancco_report");
-      const bStd = col(row, "blancco_standard");
-      if (bStatus || bReport) {
-        let bn = seq.blancco || 9001;
-        asset.blancco = {
-          reportId: bReport || "BL-" + bn++,
-          serial: serial,
-          status: bStatus || "Erased",
-          standard: bStd || "NIST 800-88 Rev.1 Purge",
-          software: "CSV import",
-          date: asset.testedAt || todayStamp(),
-          verified: /erased|pass/i.test(bStatus || "Erased"),
-          drives: [],
-          operator: me.name,
-          source: "CSV import",
-          raw: "Imported from Excel/CSV",
-        };
-        seq.blancco = bn;
+      if (col(row, "blancco_status") || col(row, "blancco_report")) {
+        asset.history.push({
+          ts: clockStamp(),
+          by: me.name,
+          ev: "CSV Blancco columns ignored — only live Blancco API reports are stored",
+        });
       }
 
       const g = gradeAsset(asset, ctx);
@@ -728,7 +720,7 @@
       }
 
       working.push(asset);
-      out.ready.push({ row: line, serial: serial, usn: usn, projectId: project.id, category: category, status: status, grade: asset.grade, asset: asset });
+      out.ready.push({ row: line, serial: serial, usn: usn, projectId: project.id, category: category, status: statusOut, grade: asset.grade, asset: asset });
     });
 
     out.seq = seq;

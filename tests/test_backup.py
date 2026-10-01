@@ -5,18 +5,34 @@ import pytest
 
 from app import backup as backup_mod
 from app.config import DATA_DIR, STATE_PATH
-from app.store import load_state, save_state
-from tests.test_api import SEED
+from app.store import empty_production_state, load_state, save_state
+
+
+SEED = empty_production_state()
+SEED["projects"] = [
+    {
+        "id": "PRJ-1001",
+        "name": "Test project",
+        "clientId": "CL-1",
+        "status": "Active",
+        "managerId": "U-1",
+        "team": ["U-1"],
+        "scope": [{"category": "Laptop", "expected": 1}],
+    }
+]
 
 
 def test_health_reports_backup_policy(client):
     res = client.get("/api/health")
     body = res.json()
-    assert body["backup"]["keep"] == 1
-    assert body["backup"]["dir"].endswith("backups")
+    assert body["backup"]["keepDaily"] == 30
+    assert body["backup"]["keepMonthly"] == 12
+    assert "keepDaily" in body["backup"]
+    assert body["backup"]["keepDaily"] == 30
     assert "daily at" in body["backup"]["schedule"]
     assert body["backup"]["latest"] is None
-    assert body["persist"]["hasState"] is False
+    assert "ready" in body["persist"]
+    assert "/data" not in res.text
 
 
 def test_backup_skipped_when_no_live_state():
@@ -43,7 +59,8 @@ def test_backup_copies_register_and_extra_files():
     assert load_state()["_rev"] == 1
 
 
-def test_second_backup_deletes_previous_only():
+def test_second_backup_keeps_history_until_retention(monkeypatch):
+    monkeypatch.setattr(backup_mod, "BACKUP_KEEP_DAILY", 1)
     save_state(dict(SEED))
     first = backup_mod.run_backup()
     live = dict(load_state())
