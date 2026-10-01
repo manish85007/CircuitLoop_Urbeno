@@ -19,6 +19,10 @@ os.environ["CORS_ORIGINS"] = "http://testserver"
 os.environ.pop("SMTP_HOST", None)
 os.environ.pop("BOOTSTRAP_TOKEN", None)
 os.environ.pop("RAILWAY_ENVIRONMENT", None)
+os.environ.pop("PREVIEW_LOGIN", None)
+os.environ.pop("RESEND_API_KEY", None)
+os.environ.pop("SENDGRID_API_KEY", None)
+os.environ.pop("MAILGUN_API_KEY", None)
 
 from app.main import app  # noqa: E402
 from app.config import AUTH_PATH, DATA_DIR  # noqa: E402

@@ -173,9 +173,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod11" in html
-    assert "qrcode.min.js?v=prod11" in html
-    assert "field.js?v=prod11" in html
+    assert "persist.js?v=prod12" in html
+    assert "qrcode.min.js?v=prod12" in html
+    assert "field.js?v=prod12" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -369,6 +369,7 @@ def test_preview_email_otp_returns_onscreen_code(client, monkeypatch):
     assert body["factor"] == "email"
     code = body.get("previewCode")
     assert code and len(code) == 6 and code.isdigit()
+    assert code in body["message"]
     verify = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
     assert verify.status_code == 200, verify.text
     assert verify.json()["user"]["email"] == "manish@urbeno.in"

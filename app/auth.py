@@ -548,8 +548,9 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
         if preview and not delivered:
             payload["previewCode"] = code
             payload["message"] = (
-                "Preview only — outbound email was not sent. Enter the on-screen code. "
-                "Production needs working SMTP or RESEND_API_KEY."
+                "Preview only — email was not sent. Your code is "
+                + code
+                + ". Production needs working SMTP or RESEND_API_KEY."
             )
         return payload
 

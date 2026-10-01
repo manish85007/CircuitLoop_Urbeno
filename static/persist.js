@@ -382,9 +382,12 @@
 
     function renderCode(pending, kind) {
       hideHint();
+      const preview = pending && String(pending.previewCode || "").replace(/\D/g, "").slice(0, 8);
       extra.innerHTML =
-        (pending && pending.previewCode
-          ? '<div class="okbox" style="margin-top:12px">Preview only — email was not sent. Code: <b id="auth_preview_code" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.12em"></b></div>'
+        (preview
+          ? '<div class="okbox" style="margin-top:12px">Preview only — email was not sent. Code: <b id="auth_preview_code" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.16em;font-size:22px">' +
+            preview +
+            "</b></div>"
           : "") +
         '<label class="f" style="margin-top:12px">' +
         (kind === "email" ? "Email code" : "Authenticator code") +
@@ -395,10 +398,7 @@
           : kind === "email"
             ? '<button type="button" class="btn" id="auth_resend" style="width:100%;justify-content:center;margin-top:10px">Email a new code</button>'
             : "");
-      if (pending && pending.previewCode) {
-        extra.querySelector("#auth_preview_code").textContent = pending.previewCode;
-        extra.querySelector("#auth_code").value = pending.previewCode;
-      }
+      if (preview) extra.querySelector("#auth_code").value = preview;
       const reset = extra.querySelector("#auth_reset");
       if (reset) {
         reset.addEventListener("click", function () {
