@@ -27,8 +27,107 @@
     reject_note: ["rejection_note", "reject_note"],
   };
 
-  /* Same register fields as ASSET_COLS / Scan & Test. Asterisk = required on import. */
-  const TEMPLATE_COLS = [
+  /* CircuitLoop Scan & Test parameter keys (all categories). One CSV column each. */
+  const TEST_PARAM_KEYS = [
+    "poweron",
+    "display",
+    "keyboard",
+    "touchpad",
+    "battery",
+    "ports",
+    "webcam",
+    "audio",
+    "wifi",
+    "charger",
+    "biosclear",
+    "sanitize",
+    "ram",
+    "storage",
+    "psu",
+    "gpu",
+    "panel",
+    "backlight",
+    "buttons",
+    "stand",
+    "cables",
+    "network",
+    "adapter",
+    "mount",
+    "mgmt",
+    "cpu",
+    "drives",
+    "raid",
+    "rails",
+    "console",
+    "poe",
+    "fans",
+    "stack",
+    "configerase",
+    "touch",
+    "cameras",
+    "charging",
+    "printtest",
+    "trays",
+    "consumable",
+  ];
+  const TEST_MEASURE_KEYS = ["battery", "ram", "storage", "cpu", "drives", "ports", "consumable"];
+  /* CircuitLoop specFields names (all categories). One CSV column each. */
+  const SPEC_FIELD_NAMES = [
+    "Processor",
+    "Generation",
+    "RAM",
+    "Storage",
+    "Screen Size",
+    "GPU",
+    "Year",
+    "Form Factor",
+    "Panel Type",
+    "Resolution",
+    "Flash Storage",
+    "OS",
+    "CPU Count",
+    "Drive Config",
+    "RAID",
+    "PSU",
+    "Port Count",
+    "Speed",
+    "PoE",
+    "Stackable",
+    "Firmware",
+    "Cellular",
+    "Type",
+    "Mono/Colour",
+    "Duplex",
+    "Network",
+  ];
+  const TEST_SPEC_COLLISION = {
+    ram: 1,
+    storage: 1,
+    gpu: 1,
+    psu: 1,
+    raid: 1,
+    poe: 1,
+    network: 1,
+  };
+
+  function testColName(key) {
+    return "Test: " + key;
+  }
+  function measureColName(key) {
+    return "Measure: " + key;
+  }
+  function specColName(field) {
+    return "Spec: " + field;
+  }
+  function slug(s) {
+    return String(s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+  }
+
+  const IDENTITY_COLS = [
     "Serial*",
     "USN",
     "Client Asset Tag",
@@ -41,10 +140,8 @@
     "Status",
     "Grade",
     "Cosmetic",
-    "Grade Rationale",
-    "Tests Recorded",
-    "Failed Parameters",
-    "Tests",
+  ];
+  const TRAILING_COLS = [
     "Tested By",
     "Tested On",
     "Verified By",
@@ -52,70 +149,79 @@
     "Blancco Status",
     "Blancco Report",
     "Erasure Standard",
-    "Specifications",
     "Remarks",
     "Rejection Note",
   ];
+  const TEMPLATE_COLS = IDENTITY_COLS.concat(
+    TEST_PARAM_KEYS.map(testColName),
+    TEST_MEASURE_KEYS.map(measureColName),
+    SPEC_FIELD_NAMES.map(specColName),
+    TRAILING_COLS
+  );
   const REQUIRED_COLS = ["Serial*", "Project ID*", "Category*"];
 
-  const TEMPLATE_ROWS = [
+  function blankTemplateRow() {
+    return TEMPLATE_COLS.map(function () {
+      return "";
+    });
+  }
+  function setTemplateCell(row, name, val) {
+    const i = TEMPLATE_COLS.indexOf(name);
+    if (i >= 0) row[i] = val;
+  }
+  function buildExampleRows() {
+    const laptop = blankTemplateRow();
+    setTemplateCell(laptop, "Serial*", "DL5540-NEW01");
+    setTemplateCell(laptop, "Category*", "Laptop");
+    setTemplateCell(laptop, "Brand", "Dell");
+    setTemplateCell(laptop, "Model", "Latitude 5540");
+    setTemplateCell(laptop, "Project ID*", "PRJ-1001");
+    setTemplateCell(laptop, "Status", "Tested");
+    setTemplateCell(laptop, "Cosmetic", "B");
     [
-      "DL5540-NEW01",
-      "",
-      "",
-      "Laptop",
-      "Dell",
-      "Latitude 5540",
-      "PRJ-1001",
-      "",
-      "",
-      "Tested",
-      "",
-      "B",
-      "",
-      "",
-      "",
-      "poweron:Pass;display:Pass;keyboard:Pass;touchpad:Pass;battery:Pass;ports:Pass;webcam:Pass;audio:Pass;wifi:Pass;charger:Pass;biosclear:Pass;sanitize:Pass",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "Processor: Intel Core i5-1335U; RAM: 16 GB; Storage: 512 GB NVMe",
-      "Imported from Excel",
-      "",
-    ],
-    [
-      "NoSerial",
-      "",
-      "",
-      "Monitor",
-      "Dell",
-      "P2422H",
-      "PRJ-1001",
-      "",
-      "",
-      "Tested",
-      "",
-      "A",
-      "",
-      "",
-      "",
-      "poweron:Pass;panel:Pass;backlight:Pass;ports:Pass;buttons:Pass;stand:Pass;cables:Pass",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "Screen Size: 24\"; Panel Type: IPS",
-      "No factory serial — physical check",
-      "",
-    ],
-  ];
+      "poweron",
+      "display",
+      "keyboard",
+      "touchpad",
+      "battery",
+      "ports",
+      "webcam",
+      "audio",
+      "wifi",
+      "charger",
+      "biosclear",
+      "sanitize",
+    ].forEach(function (k) {
+      setTemplateCell(laptop, testColName(k), "Pass");
+    });
+    setTemplateCell(laptop, measureColName("battery"), "82");
+    setTemplateCell(laptop, specColName("Processor"), "Intel Core i5-1335U");
+    setTemplateCell(laptop, specColName("Generation"), "13th Gen");
+    setTemplateCell(laptop, specColName("RAM"), "16 GB");
+    setTemplateCell(laptop, specColName("Storage"), "512 GB NVMe");
+    setTemplateCell(laptop, specColName("Screen Size"), "15.6\"");
+    setTemplateCell(laptop, specColName("Year"), "2023");
+    setTemplateCell(laptop, "Remarks", "Imported from Excel");
+
+    const monitor = blankTemplateRow();
+    setTemplateCell(monitor, "Serial*", "NoSerial");
+    setTemplateCell(monitor, "Category*", "Monitor");
+    setTemplateCell(monitor, "Brand", "Dell");
+    setTemplateCell(monitor, "Model", "P2422H");
+    setTemplateCell(monitor, "Project ID*", "PRJ-1001");
+    setTemplateCell(monitor, "Status", "Tested");
+    setTemplateCell(monitor, "Cosmetic", "A");
+    ["poweron", "panel", "backlight", "ports", "buttons", "stand", "cables"].forEach(function (k) {
+      setTemplateCell(monitor, testColName(k), "Pass");
+    });
+    setTemplateCell(monitor, specColName("Screen Size"), "24\"");
+    setTemplateCell(monitor, specColName("Panel Type"), "IPS");
+    setTemplateCell(monitor, specColName("Resolution"), "1920x1080");
+    setTemplateCell(monitor, specColName("Year"), "2022");
+    setTemplateCell(monitor, "Remarks", "No factory serial — physical check");
+    return [laptop, monitor];
+  }
+  const TEMPLATE_ROWS = buildExampleRows();
 
   function csvEscape(v) {
     return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
@@ -324,14 +430,24 @@
       }
     }
     paramsFor(ctx, cat).forEach((p) => {
-      const raw = row[p.key] || row[p.key + "_result"];
+      const labelSlug = slug(String(p.label || "").replace(/&amp;/g, "&"));
+      const raw =
+        row["test_" + p.key] ||
+        row[p.key + "_result"] ||
+        row["test_" + labelSlug] ||
+        (TEST_SPEC_COLLISION[p.key] ? "" : row[p.key]);
       const val = normTestResult(raw);
       if (val) tests[p.key] = val;
+      const meas =
+        row["measure_" + p.key] ||
+        row[p.key + "_measured"] ||
+        row[slug(p.measure || "")];
+      if (meas) measures[p.key] = String(meas).trim();
     });
     return { tests, measures };
   }
 
-  function parseSpecs(text) {
+  function parseSpecsBlob(text) {
     const out = {};
     String(text || "")
       .split(/[;|]/)
@@ -342,6 +458,25 @@
         const v = part.slice(i + 1).trim();
         if (k && v) out[k] = v;
       });
+    return out;
+  }
+
+  function specFieldsFor(ctx, cat) {
+    const fromCtx = ctx && ctx.specFields && ctx.specFields[cat];
+    if (fromCtx && fromCtx.length) return fromCtx;
+    return SPEC_FIELD_NAMES;
+  }
+
+  function parseSpecsFromRow(row, cat, ctx) {
+    const out = parseSpecsBlob(col(row, "specs"));
+    specFieldsFor(ctx, cat).forEach((field) => {
+      const raw = row["spec_" + slug(field)];
+      if (raw) out[field] = String(raw).trim();
+    });
+    SPEC_FIELD_NAMES.forEach((field) => {
+      const raw = row["spec_" + slug(field)];
+      if (raw && !out[field]) out[field] = String(raw).trim();
+    });
     return out;
   }
 
@@ -520,7 +655,7 @@
       const cosmetic = normGradeLetter(col(row, "cosmetic")) || "B";
       const parsed = parseTests(row, category, ctx);
       const tests = fillTestsIfTested(parsed.tests, category, ctx, status);
-      const specs = parseSpecs(col(row, "specs"));
+      const specs = parseSpecsFromRow(row, category, ctx);
       const tester = matchUser(ctx.users, col(row, "tested_by")) || me;
       const verifier = matchUser(ctx.users, col(row, "verified_by"));
       const id = nextAssetId(seq, working);
@@ -608,6 +743,8 @@
     ALIASES,
     TEMPLATE_COLS,
     REQUIRED_COLS,
+    TEST_PARAM_KEYS,
+    SPEC_FIELD_NAMES,
     parseCSV,
     toCSV,
     col,

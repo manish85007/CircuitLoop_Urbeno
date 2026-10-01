@@ -83,7 +83,7 @@ def test_blancco_optional_and_editable_device_fields(client):
     assert "patchMakeModel" in html
     assert "Edit all device details" in html
     assert "Use Blancco erasure reports for this client" in html
-    assert "persist.js?v=csv1" in html
+    assert "persist.js?v=csv2" in html
     assert "never requires a Blancco lookup" in html or "never require a Blancco" in html
 
 
@@ -93,8 +93,8 @@ def test_csv_asset_import_ui(client):
     assert "downloadAssetCsvTemplate" in html
     assert "previewAssetImport" in html
     assert "applyAssetImport" in html
-    assert "asset-csv.js?v=csv1" in html
-    assert "persist.js?v=csv1" in html
+    assert "asset-csv.js?v=csv2" in html
+    assert "persist.js?v=csv2" in html
     assert "circuitloop_asset_import_template.csv" in html
     assert "Serial already in the register" in html or "duplicate serial" in html.lower()
     assert "does not wipe" in html.lower() or "was not wiped" in html
@@ -112,6 +112,12 @@ def test_csv_asset_import_ui(client):
     assert "Project ID*" in body
     assert "Category*" in body
     assert "DL5540-NEW01" in body
+    assert "Test: poweron" in body
+    assert "Spec: Processor" in body
+    assert "Spec: Screen Size" in body
+    header = body.split("\n", 1)[0]
+    assert ",\"Tests\"" not in header and not header.startswith("\"Tests\"")
+    assert "\"Specifications\"" not in header
 
 
 def test_asset_csv_parser(client):

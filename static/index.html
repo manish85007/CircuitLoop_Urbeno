@@ -307,7 +307,7 @@ input[type=checkbox]{width:auto}
 <button class="fab hide" id="fab" onclick="cameraScan()" aria-label="Scan barcode">⌁</button>
 <div class="modal-bg" id="modalbg"><div class="modal" id="modalbox"></div></div>
 <div id="toast"></div>
-<script src="/static/asset-csv.js?v=csv1"></script>
+<script src="/static/asset-csv.js?v=csv2"></script>
 <script>
 /* ============================================================
    CircuitLoop Field — data model
@@ -2363,13 +2363,13 @@ function openAssetCsvImport(){
  openModal(`
  <div class="modal-h"><h3>⬆ Import tested devices (CSV)</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
-  <div class="info">Excel: <b>Save as CSV</b>. Columns match the asset register. Required: ${req}. USN is assigned if blank. Empty serial / NoSerial becomes <b>NoSerial-n</b> on that project. Duplicate serials are skipped — existing devices stay. Import <b>adds</b> rows; it does not wipe the live register.</div>
+  <div class="info">Excel: <b>Save as CSV</b>. Required: ${req}. Each CircuitLoop test parameter is its own <span class="tag">Test: key</span> column (Pass / Fail / N/A). Each spec field is its own <span class="tag">Spec: name</span> column. Leave cells blank for other categories. USN is assigned if blank. Empty serial / NoSerial becomes <b>NoSerial-n</b> on that project. Duplicate serials are skipped — existing devices stay. Import <b>adds</b> rows; it does not wipe the live register.</div>
   <div class="flex" style="margin-bottom:10px">
    <button class="btn btn-sm" onclick="downloadAssetCsvTemplate()">⬇ Download template</button>
   </div>
   <div class="frow">
    <div><label class="f">CSV file</label><input type="file" accept=".csv,text/csv,.txt" onchange="assetCsvFile(event)"></div>
-   <div><label class="f">…or paste CSV</label><textarea id="imp_txt" rows="6" style="font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="Serial*,USN,Client Asset Tag,Category*,Brand,Model,Project ID*,…"></textarea></div>
+   <div><label class="f">…or paste CSV</label><textarea id="imp_txt" rows="6" style="font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="Serial*,Category*,Project ID*,Test: poweron,Spec: Processor,…"></textarea></div>
   </div>
   <div id="imp_preview" style="margin-top:12px"></div>
  </div>
@@ -2440,6 +2440,6 @@ function applyAssetImport(){
    ============================================================ */
 document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
 </script>
-<script src="/static/persist.js?v=csv1"></script>
+<script src="/static/persist.js?v=csv2"></script>
 </body>
 </html>

@@ -38,7 +38,10 @@ const ctx = {
       { key: "panel", label: "Panel", critical: true },
     ],
   },
-  specFields: {},
+  specFields: {
+    Laptop: ["Processor", "Generation", "RAM", "Storage", "Screen Size", "GPU", "Year"],
+    Monitor: ["Screen Size", "Panel Type", "Resolution", "Year"],
+  },
   blanccoCategories: ["Laptop"],
   seq: { asset: 2, usn: 50002, blancco: 9001 },
   me: { id: "U-1", name: "Manish Kumar", role: "Super Admin" },
@@ -70,22 +73,44 @@ assert(template.includes("Serial*"));
 assert(template.includes("Project ID*"));
 assert(template.includes("Category*"));
 assert.deepStrictEqual(AssetCsv.REQUIRED_COLS, ["Serial*", "Project ID*", "Category*"]);
-assert.strictEqual(AssetCsv.TEMPLATE_COLS.length, 26);
+assert(AssetCsv.TEMPLATE_COLS.includes("Test: poweron"));
+assert(AssetCsv.TEMPLATE_COLS.includes("Test: sanitize"));
+assert(AssetCsv.TEMPLATE_COLS.includes("Spec: Processor"));
+assert(AssetCsv.TEMPLATE_COLS.includes("Spec: Screen Size"));
+assert(AssetCsv.TEMPLATE_COLS.includes("Spec: RAM"));
+assert(!AssetCsv.TEMPLATE_COLS.includes("Tests"));
+assert(!AssetCsv.TEMPLATE_COLS.includes("Specifications"));
+assert(AssetCsv.TEMPLATE_COLS.length > 40);
 
 const parsedTemplate = AssetCsv.parseCSV(template);
 assert.strictEqual(parsedTemplate.length, 2);
 assert.strictEqual(parsedTemplate[0].serial, "DL5540-NEW01");
 assert.strictEqual(parsedTemplate[0].project_id, "PRJ-1001");
 assert.strictEqual(parsedTemplate[0].category, "Laptop");
+assert.strictEqual(parsedTemplate[0].test_poweron, "Pass");
+assert.strictEqual(parsedTemplate[0].spec_processor, "Intel Core i5-1335U");
+assert.strictEqual(parsedTemplate[0].spec_ram, "16 GB");
+assert.strictEqual(parsedTemplate[1].test_panel, "Pass");
+assert.strictEqual(parsedTemplate[1].spec_panel_type, "IPS");
 
-const previewOk = AssetCsv.preview(csv([baseRow()]), ctx);
+const previewOk = AssetCsv.preview(csv([baseRow({ "Test: poweron": "Pass", "Test: display": "Fail", "Spec: Processor": "Intel Core i7" })]), ctx);
 assert.strictEqual(previewOk.ready.length, 1, JSON.stringify(previewOk));
 assert.strictEqual(previewOk.skipped.length, 0);
 assert.strictEqual(previewOk.errors.length, 0);
 assert.strictEqual(previewOk.ready[0].asset.serial, "NEW-SN-001");
 assert.strictEqual(previewOk.ready[0].asset.status, "Tested");
+assert.strictEqual(previewOk.ready[0].asset.tests.poweron, "Pass");
+assert.strictEqual(previewOk.ready[0].asset.tests.display, "Fail");
+assert.strictEqual(previewOk.ready[0].asset.specs.Processor, "Intel Core i7");
 assert.ok(previewOk.ready[0].asset.usn.startsWith("URB-"));
 assert.strictEqual(ctx.assets.length, 1, "preview must not mutate existing assets");
+
+const fromTemplate = AssetCsv.preview(template, ctx);
+assert.strictEqual(fromTemplate.ready.length, 2, JSON.stringify(fromTemplate.errors));
+assert.strictEqual(fromTemplate.ready[0].asset.tests.poweron, "Pass");
+assert.strictEqual(fromTemplate.ready[0].asset.specs.Processor, "Intel Core i5-1335U");
+assert.strictEqual(fromTemplate.ready[1].serial, "NoSerial-1");
+assert.strictEqual(fromTemplate.ready[1].asset.specs["Panel Type"], "IPS");
 
 const dup = AssetCsv.preview(csv([baseRow({ "Serial*": "DL5540-88213" })]), ctx);
 assert.strictEqual(dup.ready.length, 0, JSON.stringify(dup));
