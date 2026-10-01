@@ -70,7 +70,7 @@ PUBLIC_API = {
 
 CSP = (
     "default-src 'self'; "
-    "script-src 'self' https://cdnjs.cloudflare.com; "
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com data:; "
     "img-src 'self' data:; "

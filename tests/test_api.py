@@ -281,6 +281,8 @@ def test_headers_present(client):
     res = client.get("/api/health")
     assert res.headers.get("x-frame-options") == "DENY"
     assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
+    csp = res.headers.get("content-security-policy") or ""
+    assert "script-src 'self' 'unsafe-inline'" in csp
     assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
     assert res.json()["emailOtp"] is False
     assert res.json().get("previewLogin") is False
