@@ -307,6 +307,7 @@ input[type=checkbox]{width:auto}
 <button class="fab hide" id="fab" onclick="cameraScan()" aria-label="Scan barcode">⌁</button>
 <div class="modal-bg" id="modalbg"><div class="modal" id="modalbox"></div></div>
 <div id="toast"></div>
+<script src="/static/asset-csv.js?v=csv1"></script>
 <script>
 /* ============================================================
    CircuitLoop Field — data model
@@ -490,21 +491,7 @@ function csvDownload(name,text){
 function toCSV(cols,rows){
  return [cols.join(',')].concat(rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(','))).join('\n');
 }
-function parseCSV(text){
- const rows=[];let cur='',row=[],inQ=false;text=String(text).replace(/\r/g,'');
- for(let i=0;i<text.length;i++){
-  const ch=text[i];
-  if(inQ){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=ch;}
-  else if(ch==='"')inQ=true;
-  else if(ch===','){row.push(cur);cur='';}
-  else if(ch==='\n'){row.push(cur);rows.push(row);row=[];cur='';}
-  else cur+=ch;
- }
- if(cur!==''||row.length){row.push(cur);rows.push(row);}
- if(rows.length<2)return [];
- const hdr=rows[0].map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''));
- return rows.slice(1).filter(r=>r.some(c=>String(c).trim()!=='')).map(r=>{const o={};hdr.forEach((h,i)=>o[h]=String(r[i]==null?'':r[i]).trim());return o;});
-}
+function parseCSV(text){return AssetCsv.parseCSV(text);}
 function genUSN(){return 'URB-'+String(DB.seq.usn++).padStart(6,'0');}
 function genAssetId(){return 'AST-'+String(DB.seq.asset++).padStart(5,'0');}
 
@@ -879,7 +866,8 @@ render(){
    <button class="btn btn-p" onclick="doScan()">Enter</button>
   </div>
   <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="captureNoSerial()">No serial — physical / no-power check</button>
-  <div class="hint">Camera scanning reads Code-128, Code-39, EAN, UPC and QR — use <b>Batch</b> mode to register a whole trolley without stopping. USB / Bluetooth barcode guns also work: they type the serial and press Enter. Known serials open the saved test sheet, new ones open registration. No factory serial or no power: tap <b>No serial — physical / no-power check</b> (or type <span class="tag">NoSerial</span> / leave the box empty and press Enter). The app assigns <b>NoSerial-1</b>, <b>NoSerial-2</b>, … per project so two sites do not collide.</div>
+  <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="openAssetCsvImport()">⬆ Import tested CSV</button>
+  <div class="hint">Camera scanning reads Code-128, Code-39, EAN, UPC and QR — use <b>Batch</b> mode to register a whole trolley without stopping. USB / Bluetooth barcode guns also work: they type the serial and press Enter. Known serials open the saved test sheet, new ones open registration. No factory serial or no power: tap <b>No serial — physical / no-power check</b> (or type <span class="tag">NoSerial</span> / leave the box empty and press Enter). The app assigns <b>NoSerial-1</b>, <b>NoSerial-2</b>, … per project so two sites do not collide. Already tested in Excel: <b>Save as CSV</b> and import — existing serials are skipped, the live register is not wiped.</div>
  </div>
  <div class="card" style="margin-top:18px"><div class="card-h">
    <h3>${esc(p.name)} <span class="muted" style="font-weight:400">· ${esc(clientName(p.clientId))} · ${esc(p.site)}</span></h3>
@@ -1676,6 +1664,8 @@ render(){
    <select onchange="REG.category=this.value;rerender()" style="max-width:150px"><option value="all">All categories</option>${DB.categories.map(c=>`<option ${REG.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
    <select onchange="REG.status=this.value;rerender()" style="max-width:160px"><option value="all">All statuses</option>${['Registered','In Testing','Tested','Verified','Rejected'].map(s=>`<option ${REG.status===s?'selected':''}>${s}</option>`).join('')}</select>
    <button class="btn btn-sm" onclick="exportRegisterCSV()">⬇ CSV</button>
+   <button class="btn btn-sm btn-p" onclick="openAssetCsvImport()">⬆ Import CSV</button>
+   <button class="btn btn-sm" onclick="downloadAssetCsvTemplate()">⬇ Template</button>
    <button class="btn btn-sm" onclick="bulkVerify()">✓ Verify all shown</button>
   </div></div>
   <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Asset</th><th>Project</th><th>Status</th><th>Grade</th><th>Tested by</th><th>Blancco</th><th></th></tr></thead>
@@ -2039,6 +2029,8 @@ render(){
    <button class="btn" onclick="exportBlanccoCSV()">⬇ Blancco erasure compliance (CSV)</button>
    <button class="btn" onclick="exportGradeCSV()">⬇ Grade summary (CSV)</button>
    <button class="btn" onclick="exportEngineerCSV()">⬇ Engineer productivity (CSV)</button>
+   <button class="btn" onclick="openAssetCsvImport()">⬆ Import tested devices (CSV)</button>
+   <button class="btn" onclick="downloadAssetCsvTemplate()">⬇ Import template</button>
  </div></div>
  <div class="card"><div class="card-h"><h3>Project reports</h3></div>
   <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Captured</th><th>Tested</th><th>Verified</th><th>Rejected</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
@@ -2350,10 +2342,104 @@ function toggleUser(id){
 }
 
 /* ============================================================
+   CSV import — already-tested devices (append only)
+   ============================================================ */
+let IMPORT_PREVIEW=null;
+function importCtx(){
+ return {
+  projects:DB.projects,assets:DB.assets,users:DB.users,categories:DB.categories,
+  testParams:DB.testParams,specFields:DB.specFields,blanccoCategories:DB.blanccoCategories||[],
+  seq:Object.assign({},DB.seq),me:ME,
+  defaultProjectId:typeof ACTIVE_PROJECT!=='undefined'?ACTIVE_PROJECT:null
+ };
+}
+function downloadAssetCsvTemplate(){
+ csvDownload('circuitloop_asset_import_template.csv',AssetCsv.templateCSV());
+ toast('Template downloaded — required columns are marked with *');
+}
+function openAssetCsvImport(){
+ IMPORT_PREVIEW=null;
+ const req=(AssetCsv.REQUIRED_COLS||['Serial*','Project ID*','Category*']).map(c=>'<span class="tag">'+esc(c)+'</span>').join(' ');
+ openModal(`
+ <div class="modal-h"><h3>⬆ Import tested devices (CSV)</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div class="info">Excel: <b>Save as CSV</b>. Columns match the asset register. Required: ${req}. USN is assigned if blank. Empty serial / NoSerial becomes <b>NoSerial-n</b> on that project. Duplicate serials are skipped — existing devices stay. Import <b>adds</b> rows; it does not wipe the live register.</div>
+  <div class="flex" style="margin-bottom:10px">
+   <button class="btn btn-sm" onclick="downloadAssetCsvTemplate()">⬇ Download template</button>
+  </div>
+  <div class="frow">
+   <div><label class="f">CSV file</label><input type="file" accept=".csv,text/csv,.txt" onchange="assetCsvFile(event)"></div>
+   <div><label class="f">…or paste CSV</label><textarea id="imp_txt" rows="6" style="font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="Serial*,USN,Client Asset Tag,Category*,Brand,Model,Project ID*,…"></textarea></div>
+  </div>
+  <div id="imp_preview" style="margin-top:12px"></div>
+ </div>
+ <div class="modal-f">
+  <button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="previewAssetImport()">Preview</button>
+  <button class="btn btn-p" id="imp_go" disabled onclick="applyAssetImport()">Import ready rows</button>
+ </div>`,true);
+}
+function assetCsvFile(e){
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{$('#imp_txt').value=r.result;toast('Loaded '+f.name+' — click Preview');previewAssetImport();};
+ r.readAsText(f);
+}
+function previewAssetImport(){
+ const el=$('#imp_txt');if(!el){toast('Open the import dialog first');return;}
+ const text=el.value;
+ IMPORT_PREVIEW=AssetCsv.preview(text,importCtx());
+ const p=IMPORT_PREVIEW;
+ const box=$('#imp_preview');
+ const go=$('#imp_go');
+ if(go)go.disabled=!p.ready.length;
+ const readyRows=p.ready.slice(0,40).map(r=>`<tr><td>${r.row}</td><td><b>${esc(r.serial)}</b></td><td>${esc(r.usn)}</td><td>${esc(r.projectId)}</td><td>${esc(r.category)}</td><td>${badge(r.status)}</td><td>${r.grade?badge(r.grade):'—'}</td></tr>`).join('');
+ const skipRows=p.skipped.slice(0,40).map(r=>`<tr><td>${r.row}</td><td><b>${esc(r.serial)}</b></td><td colspan="5">${esc(r.reason)}</td></tr>`).join('');
+ const errRows=p.errors.slice(0,40).map(r=>`<tr><td>${r.row||'—'}</td><td><b>${esc(r.serial||'')}</b></td><td colspan="5">${esc(r.message)}</td></tr>`).join('');
+ box.innerHTML=`
+  <div class="kpis" style="margin:0 0 12px">
+   <div class="kpi blue"><div class="lbl">Rows in file</div><div class="val">${p.total}</div></div>
+   <div class="kpi green"><div class="lbl">Ready to add</div><div class="val">${p.ready.length}</div></div>
+   <div class="kpi amber"><div class="lbl">Duplicates skipped</div><div class="val">${p.skipped.length}</div></div>
+   <div class="kpi red"><div class="lbl">Errors</div><div class="val">${p.errors.length}</div></div>
+  </div>
+  ${p.ready.length?`<div class="okbox">Will add <b>${p.ready.length}</b> device(s) to the live register. ${DB.assets.length} existing asset(s) stay.</div>`:''}
+  ${p.skipped.length?`<div class="warn">${p.skipped.length} duplicate serial(s) will be skipped. The existing register row is kept.</div>`:''}
+  ${p.errors.length?`<div class="errbox">${p.errors.length} row(s) have errors and will not import.</div>`:''}
+  ${p.ready.length?`<div class="tblwrap" style="border:1px solid var(--line);border-radius:9px;margin-bottom:10px"><table><thead><tr><th>Row</th><th>Serial</th><th>USN</th><th>Project</th><th>Category</th><th>Status</th><th>Grade</th></tr></thead><tbody>${readyRows}</tbody></table></div>
+   ${p.ready.length>40?'<div class="muted" style="font-size:12px;margin-bottom:10px">Showing first 40 ready rows.</div>':''}`:''}
+  ${p.skipped.length?`<label class="f">Duplicates (skipped)</label><div class="tblwrap" style="border:1px solid var(--line);border-radius:9px;margin-bottom:10px"><table><thead><tr><th>Row</th><th>Serial</th><th colspan="5">Reason</th></tr></thead><tbody>${skipRows}</tbody></table></div>`:''}
+  ${p.errors.length?`<label class="f">Errors</label><div class="tblwrap" style="border:1px solid var(--line);border-radius:9px"><table><thead><tr><th>Row</th><th>Serial</th><th colspan="5">Error</th></tr></thead><tbody>${errRows}</tbody></table></div>`:''}`;
+ if(!p.ready.length&&!p.skipped.length&&!p.errors.length)toast('No data rows in that CSV');
+ else toast('Preview: '+p.ready.length+' ready, '+p.skipped.length+' duplicate(s), '+p.errors.length+' error(s)');
+}
+function applyAssetImport(){
+ if(!IMPORT_PREVIEW||!IMPORT_PREVIEW.ready.length){toast('Nothing to import — preview the CSV first');return;}
+ const before=DB.assets.length;
+ let added=0,skipped=0;
+ IMPORT_PREVIEW.ready.forEach(item=>{
+  const a=item.asset;if(!a)return;
+  if(serialTaken(a.serial,a.projectId)){skipped++;return;}
+  DB.assets.push(a);
+  added++;
+ });
+ if(IMPORT_PREVIEW.seq){
+  DB.seq.asset=Math.max(DB.seq.asset||0,IMPORT_PREVIEW.seq.asset||0);
+  DB.seq.usn=Math.max(DB.seq.usn||0,IMPORT_PREVIEW.seq.usn||0);
+  DB.seq.blancco=Math.max(DB.seq.blancco||0,IMPORT_PREVIEW.seq.blancco||0);
+ }
+ IMPORT_PREVIEW=null;
+ closeModal();
+ rerender();
+ const extra=skipped?(' '+skipped+' skipped as duplicates at import time.'):'';
+ toast('Imported '+added+' device(s). Register now '+(before+added)+' (was '+before+'). Existing data was not wiped.'+extra);
+}
+
+/* ============================================================
    Boot
    ============================================================ */
 document.addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
 </script>
-<script src="/static/persist.js?v=field2"></script>
+<script src="/static/persist.js?v=csv1"></script>
 </body>
 </html>

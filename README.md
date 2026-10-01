@@ -97,6 +97,7 @@ Do **not** delete `/data/circuitloop-state.json` first. Restore replaces it in p
 - Click-to-sign-in session cookie
 - Blancco live lookup via the server (demo simulation if no key). **Optional:** submit, verify, and complete never require a Blancco lookup, report, or pass. Super Admins opt a client in under Masters → Clients to enable auto-pull.
 - Device identity is editable on existing assets (make/model, serial, USN, category, project, tag, specs) so testers can fix data-entry errors.
+- **CSV import** of already-tested devices (Excel → Save as CSV). Super Admin: Asset Register / Reports. Field Engineer: Scan & Test, assigned projects only. Preview shows ready / duplicate / error counts, then **adds** rows. Duplicate serials are skipped. The live register is never wiped. Download `circuitloop_asset_import_template.csv` from the import dialog (required columns marked `*`: Serial, Project ID, Category). Also `GET /api/assets/import-template.csv`.
 
 ## Not in this slice
 
@@ -108,7 +109,7 @@ Do **not** delete `/data/circuitloop-state.json` first. Restore replaces it in p
 
 ```
 app/          FastAPI app, JSON store, daily backup, session, Blancco proxy
-static/       circuitloop-field.html (+ persist.js)
+static/       circuitloop-field.html (+ persist.js, asset-csv.js, import template)
 data/         created at runtime (gitignored); production is the Railway volume at /data
 data/backups/ latest snapshot only (runtime)
 ```

@@ -83,8 +83,51 @@ def test_blancco_optional_and_editable_device_fields(client):
     assert "patchMakeModel" in html
     assert "Edit all device details" in html
     assert "Use Blancco erasure reports for this client" in html
-    assert "persist.js?v=field2" in html
+    assert "persist.js?v=csv1" in html
     assert "never requires a Blancco lookup" in html or "never require a Blancco" in html
+
+
+def test_csv_asset_import_ui(client):
+    html = client.get("/").text
+    assert "openAssetCsvImport" in html
+    assert "downloadAssetCsvTemplate" in html
+    assert "previewAssetImport" in html
+    assert "applyAssetImport" in html
+    assert "asset-csv.js?v=csv1" in html
+    assert "persist.js?v=csv1" in html
+    assert "circuitloop_asset_import_template.csv" in html
+    assert "Serial already in the register" in html or "duplicate serial" in html.lower()
+    assert "does not wipe" in html.lower() or "was not wiped" in html
+    js = client.get("/static/asset-csv.js")
+    assert js.status_code == 200
+    assert "no-store" in js.headers.get("cache-control", "")
+    assert "Serial*" in js.text
+    assert "Project ID*" in js.text
+    assert "Category*" in js.text
+    tpl = client.get("/api/assets/import-template.csv")
+    assert tpl.status_code == 200
+    assert "text/csv" in tpl.headers.get("content-type", "")
+    body = tpl.content.decode("utf-8")
+    assert "Serial*" in body
+    assert "Project ID*" in body
+    assert "Category*" in body
+    assert "DL5540-NEW01" in body
+
+
+def test_asset_csv_parser(client):
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        ["node", str(root / "tests" / "test_asset_csv.js")],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ok" in result.stdout
 
 
 def test_jobs_api_removed(client):

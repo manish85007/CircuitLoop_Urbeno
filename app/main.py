@@ -178,6 +178,24 @@ def persist_js() -> FileResponse:
     return FileResponse(STATIC_DIR / "persist.js", media_type="text/javascript", headers=NO_STORE)
 
 
+@app.get("/static/asset-csv.js")
+def asset_csv_js() -> FileResponse:
+    return FileResponse(STATIC_DIR / "asset-csv.js", media_type="text/javascript", headers=NO_STORE)
+
+
+@app.get("/api/assets/import-template.csv")
+def asset_import_template() -> FileResponse:
+    path = STATIC_DIR / "circuitloop_asset_import_template.csv"
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            **NO_STORE,
+            "Content-Disposition": 'attachment; filename="circuitloop_asset_import_template.csv"',
+        },
+    )
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
