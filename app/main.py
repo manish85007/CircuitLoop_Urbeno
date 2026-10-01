@@ -29,6 +29,7 @@ from app.config import (
     BRAND,
     ROOT,
     cors_origin_list,
+    email_otp_enabled,
     ensure_dirs,
 )
 from app.store import (
@@ -160,6 +161,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 class EmailIn(BaseModel):
     email: str = Field(min_length=3, max_length=120)
     bootstrapToken: str = ""
+    method: str = ""
 
 
 class VerifyIn(BaseModel):
@@ -188,6 +190,7 @@ def health() -> JSONResponse:
             "brand": BRAND,
             "persist": {"ready": bool(state)},
             "backup": public_backup_status(),
+            "emailOtp": email_otp_enabled(),
         }
     )
 
@@ -195,7 +198,7 @@ def health() -> JSONResponse:
 @app.post("/api/auth/start")
 @app.post("/api/login")
 def auth_start(body: EmailIn) -> JSONResponse:
-    return api_json(start_login(body.email, body.bootstrapToken))
+    return api_json(start_login(body.email, body.bootstrapToken, body.method))
 
 
 @app.post("/api/auth/verify")
@@ -392,6 +395,11 @@ def closed_docs() -> JSONResponse:
 @app.get("/static/persist.js")
 def persist_js() -> FileResponse:
     return FileResponse(STATIC_DIR / "persist.js", media_type="text/javascript", headers=NO_STORE)
+
+
+@app.get("/static/qrcode.min.js")
+def qrcode_js() -> FileResponse:
+    return FileResponse(STATIC_DIR / "qrcode.min.js", media_type="text/javascript", headers=NO_STORE)
 
 
 @app.get("/static/asset-csv.js")

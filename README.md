@@ -20,11 +20,14 @@ Roles are assigned on the server. There is no click-a-name login.
 SMTP is optional. If no email API is configured, authenticator is the working factor.
 
 1. Open https://loop.urbeno.in
-2. Enter your Urbeno email and Continue.
+2. Enter your Urbeno email and **Continue with authenticator**.
 3. Add **CircuitLoop** in Google Authenticator, Authy, or 1Password:
-   - Scan / paste the `otpauth://` URL, or type the secret shown.
+   - Scan the QR code, or copy the secret / `otpauth://` URL.
+   - Keep a single CircuitLoop entry. Each extra entry from an earlier try will not match.
 4. Enter the 6-digit code to confirm. That binds the authenticator to your account.
 5. Later visits: email + 6-digit authenticator code.
+
+If a code does not match, use **Set up a new authenticator QR**, delete the old CircuitLoop entry in the app, and scan the new code. The previous secret stays valid until the new one is confirmed.
 
 If `BOOTSTRAP_TOKEN` is set on the server, the first enroll also requires that token (recommended).
 

@@ -171,7 +171,8 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod1" in html
+    assert "persist.js?v=prod2" in html
+    assert "qrcode.min.js?v=prod2" in html
     assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
@@ -179,9 +180,14 @@ def test_index_production_login(client):
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
     assert "/api/auth/start" in persist.text
-    assert "PUT" not in persist.text.split("/api/state")[0] or "Whole-register" or True
+    assert "auth_qr" in persist.text
+    assert "Email me a code" in persist.text
+    assert "we will not send a fake code" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
+    qr = client.get("/static/qrcode.min.js")
+    assert qr.status_code == 200
+    assert b"qrcode" in qr.content[:80]
 
 
 def test_csv_asset_import_ui(client):
@@ -245,3 +251,63 @@ def test_headers_present(client):
     assert res.headers.get("x-frame-options") == "DENY"
     assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
     assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+    assert res.json()["emailOtp"] is False
+
+
+def test_enroll_reuses_secret_and_survives_memory_clear(client):
+    first = client.post("/api/auth/start", json={"email": "manish@urbeno.in"})
+    assert first.status_code == 200
+    body = first.json()
+    assert body["factor"] == "enroll"
+    assert body["otpauth"].startswith("otpauth://totp/")
+    secret = body["secret"]
+    second = client.post("/api/auth/start", json={"email": "manish@urbeno.in"})
+    assert second.json()["secret"] == secret
+    from app import auth as auth_mod
+
+    auth_mod._otp_challenges.clear()
+    code = pyotp.TOTP(secret).now()
+    verify = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["user"]["email"] == "manish@urbeno.in"
+
+
+def test_email_otp_not_faked_without_smtp(client):
+    res = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "email"})
+    assert res.status_code == 400
+    assert "authenticator" in res.json()["error"].lower()
+
+
+def test_admin_verify_lockout_allows_retries(client):
+    enroll_and_login(client)
+    client.delete("/api/session")
+    for _ in range(13):
+        bad = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": "000000"})
+        assert bad.status_code == 401
+        assert "too many" not in bad.json()["error"].lower()
+    start = client.post("/api/auth/start", json={"email": "manish@urbeno.in"})
+    assert start.status_code == 200
+    assert start.json()["factor"] == "totp"
+    from app.config import AUTH_PATH
+    import json
+
+    secret = json.loads(AUTH_PATH.read_text())["users"]["manish@urbeno.in"]["totpSecret"]
+    code = pyotp.TOTP(secret).now()
+    ok = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
+    assert ok.status_code == 200, ok.text
+
+
+def test_old_totp_still_works_during_reenroll(client):
+    enroll_and_login(client)
+    client.delete("/api/session")
+    from app.config import AUTH_PATH
+    import json
+
+    old = json.loads(AUTH_PATH.read_text())["users"]["manish@urbeno.in"]["totpSecret"]
+    reset = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "enroll"})
+    assert reset.status_code == 200
+    assert reset.json()["factor"] == "enroll"
+    assert reset.json()["secret"] != old
+    code = pyotp.TOTP(old).now()
+    still = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
+    assert still.status_code == 200

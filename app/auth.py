@@ -14,7 +14,7 @@ import pyotp
 from fastapi import HTTPException, Request, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.accounts import account_for_email, account_for_id, normalize_email, public_user
+from app.accounts import ADMIN_EMAIL, account_for_email, account_for_id, normalize_email, public_user
 from app.audit import append_audit
 from app.config import (
     AUTH_PATH,
@@ -36,8 +36,19 @@ from app.config import (
 serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="circuitloop-field")
 
 _lock = Lock()
+# In-memory overlay only. Enroll secrets and email OTPs are also written to AUTH_PATH
+# so a Railway restart or a second worker can still verify.
 _otp_challenges: dict[str, dict[str, Any]] = {}
 _attempts: dict[str, list[float]] = {}
+
+# ±90s of clock skew (three 30s TOTP steps including current).
+TOTP_WINDOW = 2
+RATE_WINDOW_SEC = 900
+# Super Admin must not be stranded by lockout; still cap brute-force.
+ADMIN_START_LIMIT = 40
+ADMIN_VERIFY_LIMIT = 80
+USER_START_LIMIT = 12
+USER_VERIFY_LIMIT = 24
 
 
 def _utc() -> str:
@@ -85,9 +96,18 @@ def _put_user_auth(email: str, patch: dict[str, Any]) -> dict[str, Any]:
         users = data.setdefault("users", {})
         row = dict(users.get(key) or {})
         row.update(patch)
+        for dead in list(row):
+            if row[dead] is None:
+                row.pop(dead, None)
         users[key] = row
         _save_auth(data)
         return dict(row)
+
+
+def _rate_limits(email: str) -> tuple[int, int]:
+    if normalize_email(email) == ADMIN_EMAIL:
+        return ADMIN_START_LIMIT, ADMIN_VERIFY_LIMIT
+    return USER_START_LIMIT, USER_VERIFY_LIMIT
 
 
 def _rate_ok(key: str, limit: int, window_sec: int) -> bool:
@@ -99,6 +119,76 @@ def _rate_ok(key: str, limit: int, window_sec: int) -> bool:
     bucket.append(now)
     _attempts[key] = bucket
     return True
+
+
+def _clear_attempts(*keys: str) -> None:
+    for key in keys:
+        _attempts.pop(key, None)
+
+
+def _totp_ok(secret: str | None, token: str) -> bool:
+    if not secret:
+        return False
+    try:
+        return bool(pyotp.TOTP(str(secret)).verify(token, valid_window=TOTP_WINDOW))
+    except Exception:
+        return False
+
+
+def _otpauth(secret: str, email: str) -> str:
+    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="CircuitLoop")
+
+
+def _read_challenge(email: str) -> dict[str, Any] | None:
+    addr = normalize_email(email)
+    mem = _otp_challenges.get(addr)
+    rec = _user_auth(addr).get("otpChallenge")
+    disk = rec if isinstance(rec, dict) else None
+    candidates = [c for c in (mem, disk) if c]
+    now = time.time()
+    live = [c for c in candidates if float(c.get("exp") or 0) >= now]
+    return live[0] if live else None
+
+
+def _store_challenge(email: str, challenge: dict[str, Any] | None) -> None:
+    addr = normalize_email(email)
+    if challenge is None:
+        _otp_challenges.pop(addr, None)
+        _put_user_auth(addr, {"otpChallenge": None})
+        return
+    _otp_challenges[addr] = challenge
+    _put_user_auth(addr, {"otpChallenge": challenge})
+
+
+def _require_bootstrap(bootstrap_token: str) -> None:
+    if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN:
+        raise HTTPException(
+            status_code=401,
+            detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
+        )
+
+
+def _pending_or_new_secret(addr: str, bootstrap_token: str, *, replace: bool) -> str:
+    rec = _user_auth(addr)
+    pending = str(rec.get("totpPendingSecret") or "").strip()
+    if pending:
+        return pending
+    if rec.get("totpConfirmed") and rec.get("totpSecret") and not replace:
+        return str(rec["totpSecret"])
+    unconfirmed = str(rec.get("totpSecret") or "").strip() if not rec.get("totpConfirmed") else ""
+    if unconfirmed:
+        _put_user_auth(addr, {"totpPendingSecret": unconfirmed})
+        return unconfirmed
+    _require_bootstrap(bootstrap_token)
+    secret = pyotp.random_base32()
+    _put_user_auth(
+        addr,
+        {
+            "totpPendingSecret": secret,
+            "totpPendingAt": _utc(),
+        },
+    )
+    return secret
 
 
 def issue_session(response: Response, user: dict[str, Any]) -> None:
@@ -178,25 +268,50 @@ def _send_email(to_addr: str, subject: str, body: str) -> None:
         smtp.send_message(msg)
 
 
-def start_login(email: str, bootstrap_token: str = "") -> dict[str, Any]:
+def _normalize_method(method: str) -> str:
+    choice = str(method or "").strip().lower()
+    if choice in {"authenticator", "qr", "otpauth", "app"}:
+        return "totp"
+    if choice in {"mail", "otp"}:
+        return "email"
+    if choice in {"reset", "re-enroll", "reenroll", "setup"}:
+        return "enroll"
+    return choice
+
+
+def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict[str, Any]:
     addr = normalize_email(email)
-    if not _rate_ok("start:" + addr, 8, 900):
+    start_limit, _ = _rate_limits(addr)
+    if not _rate_ok("start:" + addr, start_limit, RATE_WINDOW_SEC):
         raise HTTPException(status_code=429, detail="Too many sign-in attempts. Try again later.")
     account = account_for_email(addr)
     if account is None:
         # Same wording so the allow-list is not enumerable by timing of a distinct error.
         raise HTTPException(status_code=401, detail="That account cannot sign in.")
 
+    choice = _normalize_method(method)
     enrolled = totp_enrolled(addr)
     email_on = email_otp_enabled()
 
-    if email_on:
+    want_email = choice == "email" or (not choice and email_on and not enrolled)
+    if choice in {"totp", "enroll"}:
+        want_email = False
+
+    if want_email:
+        if not email_on:
+            raise HTTPException(
+                status_code=400,
+                detail="Email OTP is not configured. Use authenticator — scan the QR or type the secret.",
+            )
         code = f"{secrets.randbelow(1_000_000):06d}"
-        _otp_challenges[addr] = {
-            "code": code,
-            "exp": time.time() + 600,
-            "kind": "email",
-        }
+        _store_challenge(
+            addr,
+            {
+                "code": code,
+                "exp": time.time() + 600,
+                "kind": "email",
+            },
+        )
         try:
             _send_email(
                 addr,
@@ -218,47 +333,37 @@ def start_login(email: str, bootstrap_token: str = "") -> dict[str, Any]:
             "message": "Enter the 6-digit code emailed to you, or your authenticator code if enrolled.",
         }
 
-    if enrolled:
+    replace = choice == "enroll" and enrolled
+    if enrolled and not replace:
         append_audit(account, "auth.start", "session", addr, "totp challenge")
         return {
             "ok": True,
             "email": addr,
             "factor": "totp",
-            "emailOtp": False,
+            "emailOtp": email_on,
             "totpEnrolled": True,
             "message": "Enter the 6-digit code from your authenticator app.",
         }
 
-    if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN:
-        raise HTTPException(
-            status_code=401,
-            detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
-        )
-
-    secret = pyotp.random_base32()
-    _otp_challenges[addr] = {
-        "secret": secret,
-        "exp": time.time() + 900,
-        "kind": "enroll",
-    }
-    totp = pyotp.TOTP(secret)
-    otpauth = totp.provisioning_uri(name=addr, issuer_name="CircuitLoop")
+    secret = _pending_or_new_secret(addr, bootstrap_token, replace=replace)
+    otpauth = _otpauth(secret, addr)
     append_audit(account, "auth.enroll.start", "session", addr, "totp secret issued")
     return {
         "ok": True,
         "email": addr,
         "factor": "enroll",
-        "emailOtp": False,
-        "totpEnrolled": False,
+        "emailOtp": email_on,
+        "totpEnrolled": enrolled,
         "secret": secret,
         "otpauth": otpauth,
-        "message": "Scan the otpauth URL or enter the secret in your authenticator, then confirm with a 6-digit code.",
+        "message": "Scan the QR in Google Authenticator, Authy, or 1Password (or type the secret), then confirm with a 6-digit code.",
     }
 
 
 def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, Any]:
     addr = normalize_email(email)
-    if not _rate_ok("verify:" + addr, 12, 900):
+    _, verify_limit = _rate_limits(addr)
+    if not _rate_ok("verify:" + addr, verify_limit, RATE_WINDOW_SEC):
         raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
     account = account_for_email(addr)
     if account is None:
@@ -267,42 +372,51 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
     if not token.isdigit() or len(token) != 6:
         raise HTTPException(status_code=401, detail="Enter the 6-digit verification code.")
 
-    challenge = _otp_challenges.get(addr)
-    enrolled_secret = _user_auth(addr).get("totpSecret") if totp_enrolled(addr) else None
+    rec = _user_auth(addr)
+    challenge = _read_challenge(addr)
+    confirmed_secret = rec.get("totpSecret") if rec.get("totpConfirmed") else None
+    pending_secret = str(rec.get("totpPendingSecret") or "").strip()
+    if not pending_secret and challenge and challenge.get("kind") == "enroll":
+        pending_secret = str(challenge.get("secret") or "").strip()
+    if not pending_secret and rec.get("totpSecret") and not rec.get("totpConfirmed"):
+        pending_secret = str(rec.get("totpSecret") or "").strip()
 
     ok = False
     used = ""
 
-    if enrolled_secret and pyotp.TOTP(enrolled_secret).verify(token, valid_window=1):
+    if confirmed_secret and _totp_ok(confirmed_secret, token):
         ok = True
         used = "totp"
 
-    if not ok and challenge and challenge.get("exp", 0) >= time.time():
-        if challenge.get("kind") == "email" and secrets.compare_digest(challenge.get("code", ""), token):
+    if not ok and pending_secret and _totp_ok(pending_secret, token):
+        if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN and not totp_enrolled(addr):
+            raise HTTPException(
+                status_code=401,
+                detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
+            )
+        _put_user_auth(
+            addr,
+            {
+                "totpSecret": pending_secret,
+                "totpConfirmed": True,
+                "totpPendingSecret": None,
+                "totpPendingAt": None,
+                "enrolledAt": rec.get("enrolledAt") or _utc(),
+            },
+        )
+        ok = True
+        used = "enroll" if not confirmed_secret else "reenroll"
+
+    if not ok and challenge and challenge.get("kind") == "email":
+        expected = str(challenge.get("code") or "")
+        if expected and secrets.compare_digest(expected, token):
             ok = True
             used = "email"
-        elif challenge.get("kind") == "enroll":
-            secret = challenge.get("secret") or ""
-            if secret and pyotp.TOTP(secret).verify(token, valid_window=1):
-                if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN and not totp_enrolled(addr):
-                    raise HTTPException(
-                        status_code=401,
-                        detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
-                    )
-                _put_user_auth(
-                    addr,
-                    {
-                        "totpSecret": secret,
-                        "totpConfirmed": True,
-                        "enrolledAt": _utc(),
-                    },
-                )
-                ok = True
-                used = "enroll"
 
     if not ok:
         raise HTTPException(status_code=401, detail="That code is not valid.")
 
-    _otp_challenges.pop(addr, None)
+    _store_challenge(addr, None)
+    _clear_attempts("start:" + addr, "verify:" + addr)
     append_audit(account, "auth.ok", "session", addr, used)
     return public_user(account, include_contact=True)

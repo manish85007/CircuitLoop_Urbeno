@@ -193,6 +193,54 @@
     return d.firstElementChild;
   }
 
+  function copyText(text, btn) {
+    const label = btn && btn.textContent;
+    const done = function () {
+      if (btn) {
+        btn.textContent = "Copied";
+        setTimeout(function () {
+          btn.textContent = label;
+        }, 1400);
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {});
+    }
+  }
+
+  function drawEnrollQr(uri, host) {
+    if (!host) return;
+    host.innerHTML = "";
+    if (!uri) {
+      host.innerHTML =
+        '<div class="warn" style="margin:0">No otpauth URL — type the secret into your authenticator.</div>';
+      return;
+    }
+    if (typeof qrcode !== "function") {
+      host.innerHTML =
+        '<div class="warn" style="margin:0">QR library did not load — copy the secret or otpauth URL below.</div>';
+      return;
+    }
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(uri);
+      qr.make();
+      host.innerHTML = qr.createSvgTag(5, 2);
+      const svg = host.querySelector("svg");
+      if (svg) {
+        svg.setAttribute("role", "img");
+        svg.setAttribute("aria-label", "CircuitLoop authenticator QR code");
+        svg.style.width = "168px";
+        svg.style.height = "168px";
+        svg.style.maxWidth = "100%";
+        svg.style.display = "block";
+      }
+    } catch (err) {
+      host.innerHTML =
+        '<div class="warn" style="margin:0">Could not draw QR — copy the secret or otpauth URL below.</div>';
+    }
+  }
+
   function showAuth(prefill) {
     const box = document.getElementById("loginusers");
     if (!box) return;
@@ -202,8 +250,10 @@
       '<form id="authform">' +
         '<label class="f">Work email</label>' +
         '<input id="auth_email" type="email" autocomplete="username" required placeholder="you@urbeno.in">' +
+        '<div id="auth_hint" class="warn" style="margin-top:12px">Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.</div>' +
         '<div id="auth_extra"></div>' +
-        '<button class="btn btn-p" type="submit" style="width:100%;justify-content:center;margin-top:14px" id="auth_go">Continue</button>' +
+        '<button class="btn btn-p" type="submit" style="width:100%;justify-content:center;margin-top:14px" id="auth_go">Continue with authenticator</button>' +
+        '<button class="btn" type="button" style="width:100%;justify-content:center;margin-top:8px" id="auth_email_btn" disabled>Email me a code</button>' +
         '<div class="muted" id="auth_msg" style="font-size:12px;margin-top:12px"></div>' +
         "</form>"
     );
@@ -213,52 +263,140 @@
     const extra = form.querySelector("#auth_extra");
     const msg = form.querySelector("#auth_msg");
     const go = form.querySelector("#auth_go");
-    let phase = "email";
-    let pending = null;
+    const emailBtn = form.querySelector("#auth_email_btn");
+    const hint = form.querySelector("#auth_hint");
+    let phase = "pick";
+    let emailOtpLive = false;
 
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
+    function setHint() {
+      if (!hint) return;
+      if (emailOtpLive) {
+        hint.className = "info";
+        hint.style.marginTop = "12px";
+        hint.textContent =
+          "Choose authenticator (Google Authenticator / Authy / 1Password) or email a 6-digit code.";
+        emailBtn.disabled = false;
+      } else {
+        hint.className = "warn";
+        hint.style.marginTop = "12px";
+        hint.textContent =
+          "Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.";
+        emailBtn.disabled = true;
+      }
+    }
+
+    api("GET", "/api/health")
+      .then(function (h) {
+        emailOtpLive = !!(h && h.emailOtp);
+        setHint();
+      })
+      .catch(function () {
+        emailOtpLive = false;
+        setHint();
+      });
+
+    function showPrimaryActions(showEmail) {
+      go.style.display = "";
+      emailBtn.style.display = showEmail ? "" : "none";
+    }
+
+    function renderEnroll(pending) {
+      extra.innerHTML =
+        '<div class="info" style="margin-top:12px">Scan this QR in <b>Google Authenticator</b>, Authy, or 1Password. Keep one CircuitLoop entry — extra entries from earlier tries will not match.</div>' +
+        '<div id="auth_qr" style="display:flex;justify-content:center;margin:12px 0;padding:12px;background:#fff;border:1px solid var(--line);border-radius:10px"></div>' +
+        '<label class="f">Secret (type if you cannot scan)</label>' +
+        '<div class="flex" style="gap:6px"><input id="auth_secret" readonly style="font-family:ui-monospace,Menlo,monospace"><button type="button" class="btn btn-sm" id="auth_copy_secret">Copy</button></div>' +
+        '<label class="f">otpauth URL</label>' +
+        '<div class="muted" style="font-size:11px;margin:6px 0 8px;word-break:break-all" id="auth_otpauth"></div>' +
+        '<button type="button" class="btn btn-sm" id="auth_copy_otpauth" style="margin-bottom:8px">Copy otpauth URL</button>' +
+        '<label class="f">Authenticator code</label>' +
+        '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">';
+      extra.querySelector("#auth_secret").value = pending.secret || "";
+      extra.querySelector("#auth_otpauth").textContent = pending.otpauth || "";
+      drawEnrollQr(pending.otpauth, extra.querySelector("#auth_qr"));
+      extra.querySelector("#auth_copy_secret").addEventListener("click", function () {
+        copyText(pending.secret || "", extra.querySelector("#auth_copy_secret"));
+      });
+      extra.querySelector("#auth_copy_otpauth").addEventListener("click", function () {
+        copyText(pending.otpauth || "", extra.querySelector("#auth_copy_otpauth"));
+      });
+      go.textContent = "Confirm authenticator";
+      showPrimaryActions(false);
+      msg.style.color = "";
+      msg.textContent = pending.message || "";
+      extra.querySelector("#auth_code").focus();
+    }
+
+    function renderCode(pending, kind) {
+      extra.innerHTML =
+        '<label class="f" style="margin-top:12px">' +
+        (kind === "email" ? "Email code" : "Authenticator code") +
+        "</label>" +
+        '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">' +
+        (kind === "totp"
+          ? '<button type="button" class="linklike" id="auth_reset" style="display:block;margin-top:10px;font-size:12px">Code does not match? Set up a new authenticator QR</button>'
+          : "");
+      const reset = extra.querySelector("#auth_reset");
+      if (reset) {
+        reset.addEventListener("click", function () {
+          startWith("enroll");
+        });
+      }
+      go.textContent = "Verify and sign in";
+      showPrimaryActions(false);
+      msg.style.color = "";
+      msg.textContent = pending.message || "";
+      extra.querySelector("#auth_code").focus();
+    }
+
+    async function startWith(method) {
       const addr = String(email.value || "").trim().toLowerCase();
       if (!addr) return;
       go.disabled = true;
+      emailBtn.disabled = true;
       try {
-        if (phase === "email") {
-          pending = await api("POST", "/api/auth/start", { email: addr });
-          phase = pending.factor;
-          extra.innerHTML = "";
-          if (phase === "enroll") {
-            extra.innerHTML =
-              '<div class="info" style="margin-top:12px">First-time setup: add <b>CircuitLoop</b> in Google Authenticator, Authy, or 1Password.</div>' +
-              '<label class="f">Secret</label><input id="auth_secret" readonly>' +
-              '<div class="muted" style="font-size:11px;margin:6px 0 8px;word-break:break-all" id="auth_otpauth"></div>' +
-              '<label class="f">Authenticator code</label>' +
-              '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">';
-            extra.querySelector("#auth_secret").value = pending.secret || "";
-            extra.querySelector("#auth_otpauth").textContent = pending.otpauth || "";
-            go.textContent = "Confirm authenticator";
-            msg.textContent = pending.message || "";
-            extra.querySelector("#auth_code").focus();
-          } else {
-            extra.innerHTML =
-              '<label class="f" style="margin-top:12px">' +
-              (phase === "email" ? "Email code" : "Authenticator code") +
-              "</label>" +
-              '<input id="auth_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">';
-            go.textContent = "Verify and sign in";
-            msg.textContent = pending.message || "";
-            extra.querySelector("#auth_code").focus();
-          }
-        } else {
-          const code = String((extra.querySelector("#auth_code") || {}).value || "").trim();
-          const data = await api("POST", "/api/auth/verify", { email: addr, code: code });
-          await afterSignIn(data.user);
-        }
+        const pending = await api("POST", "/api/auth/start", { email: addr, method: method });
+        phase = pending.factor || "totp";
+        extra.innerHTML = "";
+        if (phase === "enroll") renderEnroll(pending);
+        else renderCode(pending, phase);
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.style.color = "var(--red)";
+        emailBtn.disabled = !emailOtpLive;
+      } finally {
+        go.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      const addr = String(email.value || "").trim().toLowerCase();
+      if (!addr) return;
+      if (phase === "pick") {
+        await startWith("totp");
+        return;
+      }
+      go.disabled = true;
+      try {
+        const code = String((extra.querySelector("#auth_code") || {}).value || "").trim();
+        const data = await api("POST", "/api/auth/verify", { email: addr, code: code });
+        await afterSignIn(data.user);
       } catch (err) {
         msg.textContent = err.message;
         msg.style.color = "var(--red)";
       } finally {
         go.disabled = false;
       }
+    });
+
+    emailBtn.addEventListener("click", async function () {
+      if (!emailOtpLive) {
+        msg.textContent = "Email OTP is not configured. Use authenticator.";
+        msg.style.color = "var(--red)";
+        return;
+      }
+      await startWith("email");
     });
   }
 
