@@ -100,6 +100,15 @@ def is_production() -> bool:
     return str(DATA_DIR) == "/data" or os.environ.get("RAILWAY_ENVIRONMENT") is not None
 
 
+def preview_login_enabled() -> bool:
+    """Local Preview only. Never on Railway or a Secure cookie host."""
+    if is_production():
+        return False
+    if cookie_secure():
+        return False
+    return os.environ.get("PREVIEW_LOGIN", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def cors_origin_list() -> list[str]:
     if CORS_ORIGINS.strip() == "*":
         return ["*"]

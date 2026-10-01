@@ -16,8 +16,8 @@ function assert(cond, msg) {
 
 assert(html.includes("function enterField("), "enterField in index");
 assert(html.includes("function leaveField("), "leaveField in index");
-assert(html.includes("canonicalizeUser"), "canonicalizeUser in index");
-assert(html.includes("persist.js?v=prod6"), "prod6 cache bust");
+assert(html.includes("function paintNav("), "paintNav in index");
+assert(html.includes("persist.js?v=prod7"), "prod7 cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");

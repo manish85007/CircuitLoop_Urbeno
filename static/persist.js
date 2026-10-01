@@ -509,6 +509,9 @@
   function openFieldApp(user) {
     const session = sessionUserFrom(user);
     if (!session) return;
+    try {
+      window.__clUser = session;
+    } catch (err) {}
     ensureUserRow(session);
     if (typeof window.enterField === "function") {
       window.enterField(session);
@@ -671,6 +674,12 @@
   };
 
   async function bootFromServer() {
+    try {
+      const health = await api("GET", "/api/health");
+      if (health && health.previewLogin) {
+        await api("POST", "/api/preview/login");
+      }
+    } catch (e) {}
     let sessionUser = null;
     try {
       const sess = await api("GET", "/api/session");

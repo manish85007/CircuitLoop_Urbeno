@@ -27,6 +27,8 @@ def test_health_does_not_leak_paths(client):
     assert body["backup"]["keepDaily"] == 30
     assert body["backup"]["keepMonthly"] == 12
 
+    assert body.get("previewLogin") is False
+
 
 def test_docs_closed(client):
     assert client.get("/docs").status_code == 404
@@ -171,8 +173,8 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod6" in html
-    assert "qrcode.min.js?v=prod6" in html
+    assert "persist.js?v=prod7" in html
+    assert "qrcode.min.js?v=prod7" in html
     assert "integrity=" in html
     assert "function blanccoRequired(a){return false;}" in html
     assert "blanccoOptIn" in html
@@ -192,6 +194,7 @@ def test_index_production_login(client):
     assert "we will not send a fake code" in persist.text
     assert "enterField" in persist.text
     assert "leaveField" in persist.text
+    assert "/api/preview/login" in persist.text
     assert "dbSeed" in persist.text
     assert "ensureLists" in persist.text
     assert "Object.assign(DB, dbSeed, state)" in persist.text
@@ -280,6 +283,7 @@ def test_headers_present(client):
     assert "content-security-policy" in {k.lower() for k in res.headers.keys()}
     assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
     assert res.json()["emailOtp"] is False
+    assert res.json().get("previewLogin") is False
 
 
 def test_health_email_otp_follows_env(client, monkeypatch):
@@ -374,3 +378,25 @@ def test_old_totp_still_works_during_reenroll(client):
     code = pyotp.TOTP(old).now()
     still = client.post("/api/auth/verify", json={"email": "manish@urbeno.in", "code": code})
     assert still.status_code == 200
+
+
+def test_preview_login_off_by_default(client):
+    res = client.post("/api/preview/login")
+    assert res.status_code == 404
+
+
+def test_preview_login_opens_super_admin(client, monkeypatch):
+    monkeypatch.setenv("PREVIEW_LOGIN", "1")
+    monkeypatch.setenv("COOKIE_SECURE", "0")
+    assert client.get("/api/health").json()["previewLogin"] is True
+    res = client.post("/api/preview/login")
+    assert res.status_code == 200, res.text
+    user = res.json()["user"]
+    assert user["email"] == "manish@urbeno.in"
+    assert user["role"] == "Super Admin"
+    assert user["id"] == "U-1"
+    sess = client.get("/api/session").json()["user"]
+    assert sess["id"] == "U-1"
+    state = client.get("/api/state")
+    assert state.status_code == 200
+    assert "projects" in state.json()["state"]

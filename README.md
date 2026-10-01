@@ -55,6 +55,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 43180 --reload
 
 Open [http://127.0.0.1:43180](http://127.0.0.1:43180). Sign in as above. The local register starts empty except the two users.
 
+For a local Preview that opens Field as Super Admin (never on Railway):
+
+```bash
+PREVIEW_LOGIN=1 COOKIE_SECURE=0 uvicorn app.main:app --host 127.0.0.1 --port 43180
+```
+
 ```bash
 pytest -q
 ```

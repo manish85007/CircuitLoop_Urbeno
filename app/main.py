@@ -31,6 +31,7 @@ from app.config import (
     cors_origin_list,
     email_otp_enabled,
     ensure_dirs,
+    preview_login_enabled,
 )
 from app.store import (
     add_manifest,
@@ -41,6 +42,7 @@ from app.store import (
     filter_state_for_user,
     import_assets,
     load_state,
+    seed_preview_register,
     upsert_asset,
     upsert_client,
     upsert_company,
@@ -63,6 +65,7 @@ PUBLIC_API = {
     ("POST", "/api/login"),
     ("POST", "/api/otp"),
     ("POST", "/api/session"),
+    ("POST", "/api/preview/login"),
 }
 
 CSP = (
@@ -124,6 +127,7 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
 async def lifespan(_: FastAPI):
     ensure_dirs()
     cutover_if_needed()
+    seed_preview_register()
     task = None
     from app.config import backup_enabled
 
@@ -191,6 +195,7 @@ def health() -> JSONResponse:
             "persist": {"ready": bool(state)},
             "backup": public_backup_status(),
             "emailOtp": email_otp_enabled(),
+            "previewLogin": preview_login_enabled(),
         }
     )
 
@@ -232,6 +237,22 @@ def read_current_session(request: Request) -> JSONResponse:
 def sign_out(response: Response) -> JSONResponse:
     clear_session(response)
     return api_json({"ok": True})
+
+
+@app.post("/api/preview/login")
+def preview_login(request: Request) -> JSONResponse:
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    if not preview_login_enabled() or host not in {"127.0.0.1", "localhost", "testserver"}:
+        return api_json({"error": "Not found."}, 404)
+    from app.accounts import ADMIN_EMAIL, account_for_email, public_user
+
+    account = account_for_email(ADMIN_EMAIL)
+    if not account:
+        return api_json({"error": "Not found."}, 404)
+    user = public_user(account, include_contact=True)
+    payload = api_json({"ok": True, "user": user})
+    issue_session(payload, account)
+    return payload
 
 
 @app.post("/api/session")

@@ -796,3 +796,79 @@ def cutover_if_needed() -> dict[str, Any]:
     return write_empty_production(
         reason="production cutover: empty register except manish@urbeno.in and darshak@urbeno.in"
     )
+
+
+def seed_preview_register() -> None:
+    """Sample client/project/assets for local Preview. Never runs in production."""
+    from app.config import preview_login_enabled
+
+    if not preview_login_enabled():
+        return
+    admin = account_for_id("U-1") or {}
+    state = load_state() or empty_production_state()
+    if state.get("projects") or state.get("assets") or state.get("clients"):
+        return
+    upsert_client(
+        admin,
+        {
+            "name": "Meridian Shared Services",
+            "blanccoOptIn": True,
+            "contact": "ITAM desk",
+            "email": "itam@example.com",
+            "address": "Bengaluru",
+        },
+    )
+    upsert_project(
+        admin,
+        {
+            "name": "Q3 laptop and monitor refresh",
+            "clientId": "CL-1",
+            "status": "Active",
+            "site": "Bengaluru campus",
+            "mode": "On-site",
+            "start": "2026-09-01",
+            "due": "2026-10-31",
+            "managerId": "U-1",
+            "team": ["U-1", "U-2"],
+            "scope": [
+                {"category": "Laptop", "expected": 20},
+                {"category": "Monitor", "expected": 8},
+            ],
+        },
+    )
+    upsert_asset(
+        admin,
+        {
+            "serial": "DL5540-10001",
+            "projectId": "PRJ-1001",
+            "category": "Laptop",
+            "brand": "Dell",
+            "model": "Latitude 5540",
+            "status": "In Testing",
+            "tests": {"poweron": "Pass"},
+        },
+    )
+    upsert_asset(
+        admin,
+        {
+            "serial": "HP24-20002",
+            "projectId": "PRJ-1001",
+            "category": "Monitor",
+            "brand": "HP",
+            "model": "E24 G5",
+            "status": "Tested",
+            "tests": {"poweron": "Pass", "panel": "Pass"},
+            "grade": "B",
+        },
+    )
+    upsert_asset(
+        admin,
+        {
+            "serial": "LN14-30003",
+            "projectId": "PRJ-1001",
+            "category": "Laptop",
+            "brand": "Lenovo",
+            "model": "ThinkPad T14",
+            "status": "Registered",
+        },
+    )

@@ -287,7 +287,21 @@ input[type=checkbox]{width:auto}
     </div>
     <div class="sub">Field console</div>
   </div>
-  <nav class="nav" id="nav"></nav>
+  <nav class="nav" id="nav">
+    <div class="navsec">Overview</div>
+    <a href="#dashboard" data-view="dashboard" onclick="event.preventDefault();show('dashboard')"><span class="ico">▦</span>Dashboard</a>
+    <div class="navsec">Field Work</div>
+    <a href="#testing" data-view="testing" onclick="event.preventDefault();show('testing')"><span class="ico">⌁</span>Scan &amp; Test</a>
+    <div class="navsec">Management</div>
+    <a href="#projects" data-view="projects" onclick="event.preventDefault();show('projects')"><span class="ico">◈</span>Projects</a>
+    <a href="#register" data-view="register" onclick="event.preventDefault();show('register')"><span class="ico">▤</span>Asset Register</a>
+    <a href="#blancco" data-view="blancco" onclick="event.preventDefault();show('blancco')"><span class="ico">🛡</span>Blancco Erasure</a>
+    <a href="#reconcile" data-view="reconcile" onclick="event.preventDefault();show('reconcile')"><span class="ico">⇄</span>Reconciliation</a>
+    <a href="#reports" data-view="reports" onclick="event.preventDefault();show('reports')"><span class="ico">⎙</span>Reports</a>
+    <div class="navsec">Administration</div>
+    <a href="#masters" data-view="masters" onclick="event.preventDefault();show('masters')"><span class="ico">⚒</span>Masters</a>
+    <a href="#usersadmin" data-view="usersadmin" onclick="event.preventDefault();show('usersadmin')"><span class="ico">☖</span>Users</a>
+  </nav>
 </aside>
 <div class="main">
   <div class="topbar">
@@ -299,7 +313,15 @@ input[type=checkbox]{width:auto}
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
   </div>
-  <div class="content" id="content"></div>
+  <div class="content" id="content">
+    <div class="kpis">
+      <div class="kpi teal"><div class="lbl">Open projects</div><div class="val">—</div><div class="sub">Live counts load after sign-in</div></div>
+      <div class="kpi blue"><div class="lbl">Assets captured</div><div class="val">—</div></div>
+      <div class="kpi amber"><div class="lbl">Pending test</div><div class="val">—</div></div>
+      <div class="kpi green"><div class="lbl">Verified</div><div class="val">—</div></div>
+    </div>
+    <div class="info">Use the sidebar for Dashboard, Scan &amp; Test, Projects, Asset Register, Blancco, Reports, Masters and Users.</div>
+  </div>
 </div>
 </div>
 <div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
@@ -460,6 +482,19 @@ function canonicalizeUser(row){
  const role=/super\s*admin/i.test(raw)?'Super Admin':'Field Engineer';
  return {id:id,name:row.name||'',email:row.email||'',role:role,phone:row.phone||'',active:row.active!==false};
 }
+function currentUser(){
+ if(window.__clUser&&window.__clUser.id)return window.__clUser;
+ try{if(typeof ME!=='undefined'&&ME&&ME.id)return ME;}catch(e){}
+ try{if(window.ME&&window.ME.id)return window.ME;}catch(e){}
+ return null;
+}
+function setCurrentUser(user){
+ const session=canonicalizeUser(user);
+ window.__clUser=session;
+ try{ME=session;}catch(e){}
+ try{window.ME=session;}catch(e){}
+ return session;
+}
 const userName=id=>{const u=(Array.isArray(DB.users)?DB.users:[]).find(x=>x&&x.id===id);return u?u.name:'—';};
 const clientName=id=>{const c=(Array.isArray(DB.clients)?DB.clients:[]).find(x=>x&&x.id===id);return c?c.name:'—';};
 const projectById=id=>(Array.isArray(DB.projects)?DB.projects:[]).find(p=>p&&p.id===id);
@@ -595,22 +630,25 @@ const NAV=[
  ]}
 ];
 function allowedViews(){
- if(!ME)return [];
- const role=ME.role;
+ const user=currentUser();
+ if(!user)return [];
+ const role=user.role;
  const out=[];NAV.forEach(g=>g.items.forEach(i=>{if(i.roles.includes(role))out.push(i.v);}));return out;
 }
-function canEdit(){return ME&&ME.role==='Super Admin';}
+function canEdit(){const user=currentUser();return user&&user.role==='Super Admin';}
 function myProjects(){
  ensureDbLists();
  const list=Array.isArray(DB.projects)?DB.projects:[];
- if(!ME||ME.role==='Super Admin')return list;
- return list.filter(p=> ((p&&p.team)||[]).includes(ME.id)||(p&&p.managerId===ME.id));
+ const user=currentUser();
+ if(!user||user.role==='Super Admin')return list;
+ return list.filter(p=> ((p&&p.team)||[]).includes(user.id)||(p&&p.managerId===user.id));
 }
 function myProjectIds(){return myProjects().map(p=>p.id);}
 function visibleAssets(){
  ensureDbLists();
  const list=Array.isArray(DB.assets)?DB.assets:[];
- if(!ME||ME.role==='Super Admin')return list;
+ const user=currentUser();
+ if(!user||user.role==='Super Admin')return list;
  const ids=myProjectIds();
  return list.filter(a=>ids.includes(a.projectId));
 }
@@ -618,43 +656,78 @@ function renderLogin(){
  if(window.CircuitLoopPersist&&CircuitLoopPersist.showAuth)CircuitLoopPersist.showAuth();
 }
 function enterField(user){
+ try{
  ensureDbLists();
  const fromDb=user&&user.id?(Array.isArray(DB.users)?DB.users:[]).find(u=>u&&u.id===user.id):null;
- const session=canonicalizeUser(user)||canonicalizeUser(fromDb);
+ const session=setCurrentUser(user)||setCurrentUser(fromDb);
  if(!session){
   toast('Signed-in account is not in this register');
   return false;
  }
- ME=session;
- const existing=(DB.users||[]).find(u=>u&&u.id===ME.id);
- if(!existing) DB.users.push(Object.assign({},ME));
+ const existing=(DB.users||[]).find(u=>u&&u.id===session.id);
+ if(!existing) DB.users.push(Object.assign({},session));
  else{
-  existing.role=ME.role;
-  if(ME.name)existing.name=ME.name;
-  if(ME.email)existing.email=ME.email;
+  existing.role=session.role;
+  if(session.name)existing.name=session.name;
+  if(session.email)existing.email=session.email;
  }
  const loginview=document.getElementById('loginview');
  const appview=document.getElementById('appview');
  if(loginview)loginview.classList.add('hide');
  if(appview)appview.classList.remove('hide');
  const who=document.getElementById('whoami');
- if(who)who.textContent=ME.name+' · '+ME.role;
+ if(who)who.textContent=session.name+' · '+session.role;
  const av=document.getElementById('whoavatar');
- if(av)av.textContent=(ME.name||'U').split(' ').map(x=>x[0]).join('').slice(0,2)||'U';
+ if(av)av.textContent=(session.name||'U').split(' ').map(x=>x[0]).join('').slice(0,2)||'U';
  const fab=document.getElementById('fab');
  if(fab)fab.classList.remove('hide');
- try{buildNav();}catch(err){}
- const dest=ME.role==='Field Engineer'?'testing':'dashboard';
+ paintNav(session.role);
+ const dest=session.role==='Field Engineer'?'testing':'dashboard';
+ paintFallback(dest, null);
  try{show(dest);}catch(err){
-  const content=document.getElementById('content');
-  if(content)content.innerHTML='<div class="errbox">Could not open Field: '+esc(err&&err.message?err.message:err)+'</div>';
+  paintFallback(dest, err);
  }
- toast('Signed in as '+ME.name+' ('+ME.role+')');
+ setTimeout(function(){
+  try{show(dest);}catch(err){paintFallback(dest, err);}
+ }, 50);
+ toast('Signed in as '+session.name+' ('+session.role+')');
  return true;
+ }catch(err){
+  paintFallback('dashboard', err);
+  return false;
+ }
+}
+function paintNav(role){
+ const nav=document.getElementById('nav');
+ if(!nav)return;
+ const r=/super\s*admin/i.test(String(role||''))?'Super Admin':'Field Engineer';
+ const html=NAV.map(g=>{
+  const items=g.items.filter(i=>i.roles.includes(r));
+  if(!items.length)return '';
+  return `<div class="navsec">${g.sec}</div>`+items.map(i=>`<a href="#${i.v}" data-view="${i.v}" onclick="event.preventDefault();show('${i.v}')"><span class="ico">${i.ico}</span>${i.label}</a>`).join('');
+ }).join('');
+ nav.innerHTML=html||'<div class="navsec">Menu</div><a href="#dashboard" data-view="dashboard" onclick="event.preventDefault();show(\'dashboard\')"><span class="ico">▦</span>Dashboard</a>';
+}
+function paintFallback(dest, err){
+ const content=document.getElementById('content');
+ const titleEl=document.getElementById('pagetitle');
+ if(titleEl)titleEl.textContent=dest==='testing'?'Scan & Test':'Dashboard';
+ paintNav((currentUser()||{}).role||'Super Admin');
+ if(!content)return;
+ const msg=err&&(err.message||err)?esc(err.message||err):'';
+ content.innerHTML=
+  (msg?'<div class="errbox">'+msg+'</div>':'')+
+  '<div class="kpis">'+
+  '<div class="kpi teal"><div class="lbl">Field</div><div class="val">Ready</div><div class="sub">Use the sidebar to open modules</div></div>'+
+  '</div>'+
+  '<div class="info">Open <span class="linklike" onclick="show(\'projects\')">Projects</span>, <span class="linklike" onclick="show(\'register\')">Asset Register</span>, or <span class="linklike" onclick="show(\'testing\')">Scan &amp; Test</span>.</div>';
 }
 function leaveField(){
  try{if(typeof stopScanner==='function')stopScanner();}catch(e){}
- ME=null;CURRENT=null;
+ try{ME=null;}catch(e){}
+ try{window.ME=null;}catch(e){}
+ try{window.__clUser=null;}catch(e){}
+ CURRENT=null;
  const fab=document.getElementById('fab');
  const appview=document.getElementById('appview');
  const loginview=document.getElementById('loginview');
@@ -680,14 +753,7 @@ function logout(){
  leaveField();
 }
 function buildNav(){
- const nav=document.getElementById('nav');
- if(!nav||!ME)return;
- const html=NAV.map(g=>{
-  const items=g.items.filter(i=>i.roles.includes(ME.role));
-  if(!items.length)return '';
-  return `<div class="navsec">${g.sec}</div>`+items.map(i=>`<a data-view="${i.v}" onclick="show('${i.v}')"><span class="ico">${i.ico}</span>${i.label}</a>`).join('');
- }).join('');
- nav.innerHTML=html||'<div class="navsec">Menu</div><div class="muted" style="padding:9px 16px;font-size:12px">No modules for this role.</div>';
+ paintNav((currentUser()||{}).role);
 }
 
 /* ============================================================
@@ -697,10 +763,15 @@ const VIEWS={};
 let CURRENT=null;
 function show(v){
  ensureDbLists();
- if(!ME){return;}
+ const user=currentUser();
+ if(!user){
+  paintFallback(v||'dashboard', new Error('Sign-in session was not attached to Field.'));
+  return;
+ }
+ try{ME=user;window.ME=user;}catch(e){}
  if(!allowedViews().includes(v)){toast('Your role does not have access to that module');return;}
  CURRENT=v;
- try{buildNav();}catch(err){}
+ paintNav(user.role);
  $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===v));
  const view=VIEWS[v];
  if(!view){toast('Unknown screen');return;}
@@ -2474,7 +2545,7 @@ document.addEventListener('click',e=>{
  if(act==='setTest')setTest(btn.getAttribute('data-key'),btn.getAttribute('data-val'));
 });
 </script>
-<script src="/static/qrcode.min.js?v=prod6"></script>
-<script src="/static/persist.js?v=prod6"></script>
+<script src="/static/qrcode.min.js?v=prod7"></script>
+<script src="/static/persist.js?v=prod7"></script>
 </body>
 </html>
