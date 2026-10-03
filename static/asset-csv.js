@@ -119,6 +119,43 @@
   function specColName(field) {
     return "Spec: " + field;
   }
+  function specLegendFields(specFields, assets) {
+    const seen = new Set();
+    const out = [];
+    function add(f) {
+      const n = String(f || "").trim();
+      if (!n || seen.has(n)) return;
+      seen.add(n);
+      out.push(n);
+    }
+    SPEC_FIELD_NAMES.forEach(add);
+    if (specFields && typeof specFields === "object") {
+      Object.keys(specFields)
+        .sort()
+        .forEach((cat) => {
+          const arr = specFields[cat];
+          if (Array.isArray(arr)) arr.forEach(add);
+        });
+    }
+    if (Array.isArray(assets)) {
+      assets.forEach((a) => {
+        if (a && a.specs && typeof a.specs === "object") {
+          Object.keys(a.specs).forEach(add);
+        }
+      });
+    }
+    return out;
+  }
+  function specExportCols(specFields, assets) {
+    return specLegendFields(specFields, assets).map(specColName);
+  }
+  function specExportValues(specs, specFields, assets) {
+    const s = specs && typeof specs === "object" ? specs : {};
+    return specLegendFields(specFields, assets).map((f) => {
+      const v = s[f];
+      return v == null || v === "" ? "" : String(v);
+    });
+  }
   function slug(s) {
     return String(s || "")
       .trim()
@@ -737,6 +774,10 @@
     REQUIRED_COLS,
     TEST_PARAM_KEYS,
     SPEC_FIELD_NAMES,
+    specColName,
+    specLegendFields,
+    specExportCols,
+    specExportValues,
     parseCSV,
     toCSV,
     col,

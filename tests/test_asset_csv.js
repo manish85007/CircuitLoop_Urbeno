@@ -113,6 +113,28 @@ assert.strictEqual(fromTemplate.ready[0].asset.specs.Processor, "Intel Core i5-1
 assert.strictEqual(fromTemplate.ready[1].serial, "NoSerial-1");
 assert.strictEqual(fromTemplate.ready[1].asset.specs["Panel Type"], "IPS");
 
+const legend = AssetCsv.specLegendFields(
+  { Laptop: ["Processor", "RAM", "Storage"], Monitor: ["Panel Type"] },
+  [{ specs: { Processor: "i7", "Warranty": "1y" } }]
+);
+assert.ok(legend.indexOf("Processor") < legend.indexOf("RAM"));
+assert.ok(legend.indexOf("RAM") < legend.indexOf("Storage"));
+assert.ok(legend.includes("Panel Type"));
+assert.ok(legend.includes("Warranty"));
+const cols = AssetCsv.specExportCols({ Laptop: ["Processor", "RAM", "Storage"] });
+assert.ok(cols.includes("Spec: Processor"));
+assert.ok(cols.includes("Spec: RAM"));
+assert.ok(cols.includes("Spec: Storage"));
+assert.ok(!cols.includes("Specifications"));
+const vals = AssetCsv.specExportValues(
+  { Processor: "Intel Core i7", RAM: "16 GB", Storage: "512 GB NVMe" },
+  { Laptop: ["Processor", "RAM", "Storage"] }
+);
+assert.strictEqual(vals[cols.indexOf("Spec: Processor")], "Intel Core i7");
+assert.strictEqual(vals[cols.indexOf("Spec: RAM")], "16 GB");
+assert.strictEqual(vals[cols.indexOf("Spec: Storage")], "512 GB NVMe");
+assert.ok(!String(vals.join("|")).includes("Processor: Intel"));
+
 const dup = AssetCsv.preview(csv([baseRow({ "Serial*": "DL5540-88213" })]), ctx);
 assert.strictEqual(dup.ready.length, 0, JSON.stringify(dup));
 assert.strictEqual(dup.skipped.length, 1);

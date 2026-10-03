@@ -220,7 +220,7 @@ def test_index_production_login(client):
     assert "Demo (simulated)" not in html
     assert "persist.js?v=prod18" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod18" in html
+    assert "field.js?v=prod19" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -232,6 +232,10 @@ def test_index_production_login(client):
     assert "function enterField(" in field.text
     assert "function leaveField(" in field.text
     assert "function canonicalizeUser(" in field.text
+    assert "function specExportCols(" in field.text
+    assert "function assetCols(" in field.text
+    assert "Spec: Processor" in field.text
+    assert "Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; ')" not in field.text
     assert "function canonicalizeRole(" in field.text
     assert "Lead Engineer" in field.text
     assert "Access level" in field.text
@@ -282,7 +286,7 @@ def test_csv_asset_import_ui(client):
     html = client.get("/").text
     field = client.get("/static/field.js").text
     assert "openAssetCsvImport" in field
-    assert "asset-csv.js?v=prod1" in html
+    assert "asset-csv.js?v=prod2" in html
     js = client.get("/static/asset-csv.js")
     assert "fillTestsIfTested" in js.text
     assert "CSV Blancco columns ignored" in js.text

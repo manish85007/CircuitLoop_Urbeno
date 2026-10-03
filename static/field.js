@@ -1807,10 +1807,35 @@ render(){
    <button class="btn" onclick="exportEngineerCSV()">⬇ Engineer productivity (CSV)</button>
    <button class="btn" onclick="openAssetCsvImport()">⬆ Import tested devices (CSV)</button>
    <button class="btn" onclick="downloadAssetCsvTemplate()">⬇ Import template</button>
- </div></div>
+ </div>
+ <div class="card-b muted" style="font-size:12px">Full asset register and project CSVs put each spec field in its own column — Spec: Processor, Spec: RAM, Spec: Storage, and the rest of the Masters legend. The import template uses the same headers.</div></div>
  <div class="card"><div class="card-h"><h3>Project reports</h3></div>
   <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Captured</th><th>Tested</th><th>Verified</th><th>Rejected</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }};
+function specLegendFields(){
+ if(window.AssetCsv&&typeof AssetCsv.specLegendFields==='function'){
+  return AssetCsv.specLegendFields(DB.specFields, DB.assets);
+ }
+ const seen=new Set();
+ const out=[];
+ const add=f=>{const n=String(f||'').trim();if(!n||seen.has(n))return;seen.add(n);out.push(n);};
+ ['Processor','Generation','RAM','Storage','Screen Size','GPU','Year'].forEach(add);
+ Object.values(DB.specFields||{}).forEach(arr=>{if(Array.isArray(arr))arr.forEach(add);});
+ return out;
+}
+function specExportCols(){
+ if(window.AssetCsv&&typeof AssetCsv.specExportCols==='function'){
+  return AssetCsv.specExportCols(DB.specFields, DB.assets);
+ }
+ return specLegendFields().map(f=>'Spec: '+f);
+}
+function specExportValues(a){
+ if(window.AssetCsv&&typeof AssetCsv.specExportValues==='function'){
+  return AssetCsv.specExportValues(a&&a.specs, DB.specFields, DB.assets);
+ }
+ const specs=(a&&a.specs)||{};
+ return specLegendFields().map(f=>specs[f]||'');
+}
 function assetRow(a){
  const p=projectById(a.projectId)||{};
  const pr=testProgress(a);
@@ -1819,20 +1844,22 @@ function assetRow(a){
   a.status,a.grade,a.cosmetic,a.gradeReason,pr.done+'/'+pr.total,failed,
   userName(a.testedBy),a.testedAt,a.verifiedBy?userName(a.verifiedBy):'',a.verifiedAt,
   isBlanccoCat(a.category)?(a.blancco?a.blancco.status:'No report'):'N/A (non-laptop)',
-  a.blancco?a.blancco.reportId:'',a.blancco?a.blancco.standard:'',
-  Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; '),a.remarks,a.rejectNote||''];
+  a.blancco?a.blancco.reportId:'',a.blancco?a.blancco.standard:'']
+  .concat(specExportValues(a),[a.remarks,a.rejectNote||'']);
 }
-const ASSET_COLS=['USN','Serial','Client Asset Tag','Category','Brand','Model','Project ID','Project','Client',
- 'Status','Grade','Cosmetic','Grade Rationale','Tests Recorded','Failed Parameters',
- 'Tested By','Tested On','Verified By','Verified On','Blancco Status','Blancco Report','Erasure Standard',
- 'Specifications','Remarks','Rejection Note'];
+function assetCols(){
+ return ['USN','Serial','Client Asset Tag','Category','Brand','Model','Project ID','Project','Client',
+  'Status','Grade','Cosmetic','Grade Rationale','Tests Recorded','Failed Parameters',
+  'Tested By','Tested On','Verified By','Verified On','Blancco Status','Blancco Report','Erasure Standard']
+  .concat(specExportCols(),['Remarks','Rejection Note']);
+}
 function exportRegisterCSV(){
- csvDownload('asset_register_'+today()+'.csv',toCSV(ASSET_COLS,DB.assets.map(assetRow)));
+ csvDownload('asset_register_'+today()+'.csv',toCSV(assetCols(),DB.assets.map(assetRow)));
  toast('Asset register exported — '+DB.assets.length+' assets');
 }
 function exportProjectCSV(pid){
  const list=DB.assets.filter(a=>a.projectId===pid);
- csvDownload('assets_'+pid+'_'+today()+'.csv',toCSV(ASSET_COLS,list.map(assetRow)));
+ csvDownload('assets_'+pid+'_'+today()+'.csv',toCSV(assetCols(),list.map(assetRow)));
  toast(pid+' asset export — '+list.length+' assets');
 }
 function exportTestDetailCSV(){
