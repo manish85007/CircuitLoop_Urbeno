@@ -44,6 +44,35 @@ def test_health_does_not_leak_paths(client):
     assert delivery.get("smtpConfigured") is False
     assert delivery.get("httpsConfigured") is False
     assert "RESEND_API_KEY" in (delivery.get("hint") or "")
+    assert "Railway" not in (delivery.get("hint") or "")
+
+
+def test_smtp_health_hint_skips_railway_when_not_on_railway(monkeypatch):
+    from app.auth import _smtp_blocked_message
+    from app.config import email_delivery_public
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    status = email_delivery_public()
+    assert status["smtpConfigured"] is True
+    assert status["hint"] == "Email OTP will use SMTP."
+    assert "Railway" not in status["hint"]
+    blocked = _smtp_blocked_message("smtp.gmail.com", [465, 587])
+    assert "Railway" not in blocked
+    assert "smtp.gmail.com" in blocked
+
+
+def test_smtp_health_hint_names_railway_only_on_railway(monkeypatch):
+    from app.auth import _smtp_blocked_message
+    from app.config import email_delivery_public
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    status = email_delivery_public()
+    assert status["smtpConfigured"] is True
+    assert "Railway Hobby" in status["hint"]
+    blocked = _smtp_blocked_message("smtp.gmail.com", [465, 587])
+    assert "Railway Hobby" in blocked
 
 
 def test_docs_closed(client):
@@ -189,9 +218,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod17" in html
+    assert "persist.js?v=prod18" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod16" in html
+    assert "field.js?v=prod18" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -203,6 +232,9 @@ def test_index_production_login(client):
     assert "function enterField(" in field.text
     assert "function leaveField(" in field.text
     assert "function canonicalizeUser(" in field.text
+    assert "function canonicalizeRole(" in field.text
+    assert "Lead Engineer" in field.text
+    assert "Access level" in field.text
     assert "function ensureDbLists(" in field.text
     assert "VIEWS.dashboard" in field.text
     assert "data-act=\"addUser\"" in field.text
@@ -339,6 +371,9 @@ def test_health_email_otp_follows_env(client, monkeypatch):
     assert delivery["smtpConfigured"] is True
     assert delivery["httpsConfigured"] is False
     assert delivery["httpsProvider"] is None
+    hint = delivery.get("hint") or ""
+    assert "Hobby" not in hint
+    assert "Railway" not in hint
 
 
 def test_health_email_delivery_warns_on_railway_smtp_only(client, monkeypatch):
@@ -426,7 +461,7 @@ def test_smtp_transport_tries_ssl_then_submission():
     assert 'local_hostname="localhost"' in src
     assert "api.resend.com" in src
     assert "previewCode" in src
-    assert "web service" in auth_mod._smtp_blocked_message("smtp.gmail.com", [465, 587])
+    assert "smtp.gmail.com" in auth_mod._smtp_blocked_message("smtp.gmail.com", [465, 587])
     assert "RESEND_API_KEY" in auth_mod._smtp_blocked_message("smtp.gmail.com", [465, 587])
 
 
@@ -595,6 +630,95 @@ def test_super_admin_adds_user_who_can_enroll(client):
         json={"name": "Nope", "email": "nope@urbeno.in", "role": "Field Engineer"},
     )
     assert add_as_field.status_code == 403
+
+
+def test_super_admin_changes_existing_user_access_level(client):
+    enroll_and_login(client)
+    blocked = client.put(
+        "/api/users/U-1",
+        json={"id": "U-1", "name": "Manish Kumar", "role": "Lead Engineer"},
+    )
+    assert blocked.status_code == 400
+    assert "primary Super Admin" in blocked.json()["error"].lower() or "cannot be changed" in blocked.json()["error"].lower()
+    unknown = client.put(
+        "/api/users/U-2",
+        json={"id": "U-2", "name": "Darshak", "role": "Intern"},
+    )
+    assert unknown.status_code == 400
+    saved = client.put(
+        "/api/users/U-2",
+        json={"id": "U-2", "name": "Darshak", "email": "darshak@urbeno.in", "role": "Lead Engineer"},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["user"]["role"] == "Lead Engineer"
+    roster = {u["id"]: u["role"] for u in saved.json()["state"]["users"]}
+    assert roster["U-2"] == "Lead Engineer"
+    created = client.post(
+        "/api/users",
+        json={"name": "Priya Shetty", "email": "priya@urbeno.in", "role": "Field Engineer"},
+    )
+    assert created.status_code == 200, created.text
+    uid = created.json()["user"]["id"]
+    promoted = client.put(
+        f"/api/users/{uid}",
+        json={"id": uid, "name": "Priya Shetty", "email": "priya@urbeno.in", "role": "Lead Engineer"},
+    )
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["user"]["role"] == "Lead Engineer"
+    client.delete("/api/session")
+    lead = enroll_and_login(client, "darshak@urbeno.in")
+    assert lead["role"] == "Lead Engineer"
+    me = client.get("/api/session").json()["user"]
+    assert me["role"] == "Lead Engineer"
+    client_res = client.post("/api/clients", json={"name": "Lead Co"})
+    assert client_res.status_code == 200, client_res.text
+    project = client.post(
+        "/api/projects",
+        json={
+            "name": "Lead job",
+            "clientId": client_res.json()["client"]["id"],
+            "status": "Active",
+            "managerId": "U-2",
+            "team": [],
+            "scope": [{"category": "Laptop", "expected": 1}],
+        },
+    )
+    assert project.status_code == 200, project.text
+    pid = project.json()["project"]["id"]
+    asset = client.post(
+        "/api/assets",
+        json={
+            "serial": "LEAD-1",
+            "projectId": pid,
+            "category": "Laptop",
+            "status": "Tested",
+            "tests": {"poweron": "Pass"},
+            "grade": "A",
+        },
+    )
+    assert asset.status_code == 200, asset.text
+    aid = asset.json()["asset"]["id"]
+    verified = client.put(
+        f"/api/assets/{aid}",
+        json={
+            "id": aid,
+            "serial": "LEAD-1",
+            "projectId": pid,
+            "status": "Verified",
+            "tests": {"poweron": "Pass"},
+            "grade": "A",
+            "verifiedBy": "U-2",
+        },
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["asset"]["status"] == "Verified"
+    users = client.post(
+        "/api/users",
+        json={"name": "Nope", "email": "nope2@urbeno.in", "role": "Field Engineer"},
+    )
+    assert users.status_code == 403
+    config = client.put("/api/config", json={"categories": ["Laptop"]})
+    assert config.status_code == 403
 
 
 def test_unknown_email_still_rejected_after_roster_grows(client):

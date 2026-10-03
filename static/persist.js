@@ -621,6 +621,13 @@
     else renderPick();
   }
 
+  function canonicalizeRole(raw) {
+    const s = String(raw || "").replace(/\s+/g, " ").trim();
+    if (/super\s*admin/i.test(s)) return "Super Admin";
+    if (/lead\s*engineer/i.test(s)) return "Lead Engineer";
+    return "Field Engineer";
+  }
+
   function sessionUserFrom(payload) {
     const raw = payload && (payload.user || payload);
     if (!raw || typeof raw !== "object") return null;
@@ -631,7 +638,7 @@
       userId: id,
       name: raw.name || "",
       email: raw.email || "",
-      role: /super\s*admin/i.test(String(raw.role || "")) ? "Super Admin" : "Field Engineer",
+      role: canonicalizeRole(raw.role),
       phone: raw.phone || "",
       active: raw.active !== false,
     };

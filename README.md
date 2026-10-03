@@ -11,9 +11,17 @@ Built-in accounts:
 | Email | Role |
 | --- | --- |
 | **manish@urbeno.in** | Super Admin |
-| **darshak@urbeno.in** | Field Engineer |
+| **darshak@urbeno.in** | Field Engineer (Super Admin can change this to Lead Engineer) |
 
-A Super Admin can add more people from **Users → Add user**. New accounts cannot self-enroll from the login page. The Super Admin sends an authenticator invite (Users → Send invite, or the token shown when adding the user). Roles are assigned on the server. There is no click-a-name login and no password store.
+Three access levels:
+
+| Role | What they can do |
+| --- | --- |
+| **Super Admin** | Everything: Users, Masters, Blancco config, reconciliation, verify |
+| **Lead Engineer** | Create clients/projects, assign Field Engineers, verify and reopen captures. Not Users/Masters/Blancco config |
+| **Field Engineer** | Dashboard, Scan & Test, My Projects for assigned work only |
+
+A Super Admin can add more people from **Users → Add user** and change an existing person’s access level. New accounts cannot self-enroll from the login page. The Super Admin sends an authenticator invite (Users → Send invite, or the token shown when adding the user). Roles are assigned on the server. There is no click-a-name login and no password store.
 
 ### First-time authenticator (TOTP) enroll
 
@@ -33,7 +41,7 @@ If the authenticator is lost: Super Admin → **Reset authenticator** on that us
 
 ### Email OTP
 
-Railway Hobby/Trial **blocks outbound SMTP** (ports 25, 465, 587). Gmail `SMTP_HOST=smtp.gmail.com` on the web service will 503. Prefer **Resend/SendGrid/Mailgun HTTPS** on the **web** service. Authenticator still works.
+Production on GCE (`loop.urbeno.in`) can send Gmail SMTP. Railway Hobby/Trial still **blocks outbound SMTP** (ports 25, 465, 587) if you hit that host — Gmail there will 503. Prefer **Resend/SendGrid/Mailgun HTTPS** on Railway. Authenticator still works.
 
 Set these on the Railway **web** service (not a worker):
 
@@ -109,7 +117,7 @@ Session cookie required on every `/api/*` except `/api/health`, `/api/auth/start
 
 Per-record writes: `POST/PUT /api/assets`, `/api/clients`, `/api/projects`, `/api/company`, `/api/config`, `/api/sync`. Whole-DB `PUT /api/state` is disabled.
 
-Field Engineers only receive assigned projects/assets. Super Admin sees the full register minus secrets.
+Field Engineers only receive assigned projects/assets. Lead Engineers and Super Admins see the full register minus secrets. Users, Masters, company, and Blancco config stay Super Admin only.
 
 ## Not in this slice
 

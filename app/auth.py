@@ -35,6 +35,7 @@ from app.config import (
     email_otp_enabled,
     ensure_dirs,
     http_mail_settings,
+    on_railway,
     preview_login_enabled,
     smtp_settings,
 )
@@ -500,7 +501,9 @@ def require_user(request: Request) -> dict:
 
 def require_admin(request: Request) -> dict:
     user = require_user(request)
-    if user.get("role") != "Super Admin":
+    from app.store import is_super_admin
+
+    if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super Admin only.")
     return user
 
@@ -581,14 +584,25 @@ def _smtp_network_blocked(exc: BaseException) -> bool:
 
 
 def _smtp_blocked_message(host: str, ports: list[int]) -> str:
+    tried = ", ".join(str(p) for p in ports)
+    if on_railway():
+        return (
+            "SMTP blocked from this host ("
+            + str(host)
+            + "). Tried "
+            + tried
+            + ". Railway Hobby/Trial drops outbound 25/465/587, so Gmail SMTP cannot send. "
+            "On the web service set RESEND_API_KEY (or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN). "
+            "SMTP_HOST/SMTP_USER/SMTP_PASSWORD need Railway Pro plus a redeploy. Use authenticator until then."
+        )
     return (
         "SMTP blocked from this host ("
         + str(host)
         + "). Tried "
-        + ", ".join(str(p) for p in ports)
-        + ". Railway Hobby/Trial drops outbound 25/465/587, so Gmail SMTP cannot send. "
-        "On the web service set RESEND_API_KEY (or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN). "
-        "SMTP_HOST/SMTP_USER/SMTP_PASSWORD need Railway Pro plus a redeploy. Use authenticator until then."
+        + tried
+        + ". Check outbound 25/465/587, credentials, and that the from-address is allowed. "
+        "HTTPS mail (RESEND_API_KEY, SENDGRID_API_KEY, or MAILGUN_API_KEY + MAILGUN_DOMAIN) is the fallback. "
+        "Authenticator still works."
     )
 
 

@@ -21,8 +21,8 @@ assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod16"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod17"), "prod17 cache bust");
+assert(html.includes("field.js?v=prod18"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod18"), "prod18 cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
@@ -32,6 +32,8 @@ assert(persist.includes("localStorage"), "signed-out flag survives new tabs");
 assert(persist.includes("keepalive"), "logout fetch survives unload");
 assert(persist.includes("forceLoginScreen"), "refresh keeps login screen");
 assert(field.includes("leaveField()"), "show() without session leaves Field");
+assert(field.includes("Lead Engineer"), "Lead Engineer role");
+assert(field.includes("function isReviewer("), "isReviewer helper");
 assert(persist.includes("previewCode"), "preview email OTP shown on-screen");
 
 function fakeDom() {
@@ -193,5 +195,20 @@ vm.runInContext("leaveField()", ctx);
 assert(documentRef._ids.appview.classList.contains("hide"), "leaveField hides app");
 assert(!documentRef._ids.loginview.classList.contains("hide"), "leaveField shows login");
 assert(vm.runInContext("ME", ctx) === null, "ME cleared");
+
+const leadOk = vm.runInContext(
+  'enterField({id:"U-2",name:"Darshak",email:"darshak@urbeno.in",role:"Lead Engineer"})',
+  ctx
+);
+assert(leadOk === true, "enterField Lead Engineer returns true");
+assert(vm.runInContext("ME && ME.role", ctx) === "Lead Engineer", "Lead Engineer role preserved");
+assert(documentRef._ids.nav.innerHTML.includes("Projects"), "Lead nav has Projects");
+assert(documentRef._ids.nav.innerHTML.includes("Asset Register"), "Lead nav has Asset Register");
+assert(documentRef._ids.nav.innerHTML.includes("Reports"), "Lead nav has Reports");
+assert(!documentRef._ids.nav.innerHTML.includes(">Users<") && !documentRef._ids.nav.innerHTML.includes("Users</a>"), "Lead nav hides Users, got: " + documentRef._ids.nav.innerHTML);
+assert(!documentRef._ids.nav.innerHTML.includes("Masters"), "Lead nav hides Masters");
+assert(documentRef._ids.whoami.textContent.includes("Lead Engineer"), "whoami Lead Engineer");
+
+vm.runInContext("leaveField()", ctx);
 
 console.log("ok");

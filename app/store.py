@@ -38,9 +38,37 @@ _lock = Lock()
 REQUIRED = ("company", "users", "clients", "projects", "assets")
 LIST_KEYS = ("users", "clients", "projects", "assets", "manifests")
 ASSET_STATUSES = {"Registered", "In Testing", "Tested", "Verified", "Rejected"}
-ROLES = {"Super Admin", "Field Engineer"}
+ROLES = {"Super Admin", "Lead Engineer", "Field Engineer"}
+REVIEW_ROLES = frozenset({"Super Admin", "Lead Engineer"})
 ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,40}$")
 SERIAL_RE = re.compile(r"^.{1,80}$")
+
+
+def canonicalize_role(value: Any, default: str = "Field Engineer") -> str:
+    raw = str(value or "").strip()
+    compact = re.sub(r"\s+", " ", raw).lower()
+    collapsed = compact.replace(" ", "")
+    if compact == "super admin" or collapsed == "superadmin":
+        return "Super Admin"
+    if compact == "lead engineer" or collapsed == "leadengineer":
+        return "Lead Engineer"
+    if compact == "field engineer" or collapsed == "fieldengineer":
+        return "Field Engineer"
+    if raw in ROLES:
+        return raw
+    return default if default in ROLES else "Field Engineer"
+
+
+def is_super_admin(user: dict[str, Any] | None) -> bool:
+    return canonicalize_role((user or {}).get("role")) == "Super Admin"
+
+
+def can_review_all(user: dict[str, Any] | None) -> bool:
+    return canonicalize_role((user or {}).get("role")) in REVIEW_ROLES
+
+
+def can_manage_projects(user: dict[str, Any] | None) -> bool:
+    return can_review_all(user)
 
 DEMO_USER_EMAILS = frozenset(
     {
@@ -210,7 +238,7 @@ def _strip_secrets(state: dict[str, Any]) -> dict[str, Any]:
 
 def assigned_project_ids(state: dict[str, Any], user: dict[str, Any]) -> set[str]:
     uid = user.get("id") or user.get("userId")
-    if user.get("role") == "Super Admin":
+    if can_review_all(user):
         return {str(p.get("id")) for p in (state.get("projects") or []) if p.get("id")}
     out: set[str] = set()
     for proj in state.get("projects") or []:
@@ -227,7 +255,7 @@ def filter_state_for_user(state: dict[str, Any] | None, user: dict[str, Any]) ->
         state = empty_production_state()
     view = _strip_secrets(state)
     uid = user.get("id") or user.get("userId")
-    if user.get("role") == "Super Admin":
+    if can_review_all(user):
         view["users"] = [public_user(u, include_contact=True) for u in (view.get("users") or [])]
         return view
     pids = assigned_project_ids(state, user)
@@ -329,7 +357,7 @@ def serial_taken(state: dict[str, Any], serial: str, project_id: str, except_id:
 
 
 def _can_edit_project(user: dict[str, Any], state: dict[str, Any], project_id: str) -> bool:
-    if user.get("role") == "Super Admin":
+    if can_review_all(user):
         return True
     return project_id in assigned_project_ids(state, user)
 
@@ -346,7 +374,7 @@ def _apply_verified_lock(existing: dict[str, Any] | None, incoming: dict[str, An
         incoming.pop("gradeFrozen", None)
         return incoming
     reopen = incoming.get("status") in {"Registered", "In Testing", "Tested", "Rejected"}
-    if user.get("role") != "Super Admin":
+    if not can_review_all(user):
         raise HTTPException(status_code=403, detail="Verified assets are locked.")
     if not reopen and incoming.get("status") == "Verified":
         locked = copy.deepcopy(existing)
@@ -408,7 +436,7 @@ def upsert_asset(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any
         status = str(payload.get("status") or (existing or {}).get("status") or "Registered")
         if status not in ASSET_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status.")
-        if user.get("role") != "Super Admin" and status == "Verified":
+        if not can_review_all(user) and status == "Verified":
             status = "Tested"
         incoming = copy.deepcopy(existing) if existing else {}
         incoming.update(payload)
@@ -428,7 +456,7 @@ def upsert_asset(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any
             incoming["measures"] = {}
         if not isinstance(incoming.get("specs"), dict):
             incoming["specs"] = {}
-        if user.get("role") != "Super Admin":
+        if not can_review_all(user):
             incoming["testedBy"] = incoming.get("testedBy") or user.get("id")
             incoming["verifiedBy"] = (existing or {}).get("verifiedBy")
             incoming["verifiedAt"] = (existing or {}).get("verifiedAt")
@@ -449,8 +477,8 @@ def upsert_asset(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any
 
 
 def upsert_client(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
-        raise HTTPException(status_code=403, detail="Super Admin only.")
+    if not can_manage_projects(user):
+        raise HTTPException(status_code=403, detail="Lead Engineer or Super Admin only.")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Client must be JSON.")
     name = str(payload.get("name") or "").strip()
@@ -483,8 +511,8 @@ def upsert_client(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, An
 
 
 def upsert_project(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
-        raise HTTPException(status_code=403, detail="Super Admin only.")
+    if not can_manage_projects(user):
+        raise HTTPException(status_code=403, detail="Lead Engineer or Super Admin only.")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Project must be JSON.")
     name = str(payload.get("name") or "").strip()
@@ -524,7 +552,7 @@ def upsert_project(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
 
 
 def upsert_company(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
+    if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super Admin only.")
     with _lock:
         state = _read_unlocked() or empty_production_state()
@@ -543,7 +571,7 @@ def upsert_company(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
 
 
 def upsert_config(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
+    if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super Admin only.")
     with _lock:
         state = _read_unlocked() or empty_production_state()
@@ -589,7 +617,7 @@ def _canon_register_user(row: dict[str, Any]) -> dict[str, Any] | None:
     email = valid_login_email(row.get("email"))
     if not uid or not email:
         return None
-    role = row.get("role") if row.get("role") in ROLES else "Field Engineer"
+    role = canonicalize_role(row.get("role"))
     return {
         "id": uid,
         "name": str(row.get("name") or email.split("@")[0])[:80],
@@ -615,11 +643,15 @@ def _overlay_seed(state: dict[str, Any], seed: dict[str, Any]) -> dict[str, Any]
         row["phone"] = str(overlay.get("phone") or "")[:40]
         if seed["id"] != ADMIN_ID and "active" in overlay:
             row["active"] = bool(overlay.get("active", True))
-    if seed["id"] == ADMIN_ID:
-        row["active"] = True
+        if seed["id"] != ADMIN_ID:
+            stored = overlay.get("role")
+            if stored in ROLES:
+                row["role"] = stored
     row["id"] = seed["id"]
     row["email"] = seed["email"]
-    row["role"] = seed["role"]
+    if seed["id"] == ADMIN_ID:
+        row["active"] = True
+        row["role"] = "Super Admin"
     return row
 
 
@@ -662,7 +694,7 @@ def _alloc_user_id(state: dict[str, Any], seq: dict[str, Any]) -> str:
 
 
 def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
+    if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super Admin only.")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="User must be JSON.")
@@ -687,7 +719,9 @@ def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[s
                     raise HTTPException(status_code=409, detail="That email already has an account.")
             if account_for_email(email):
                 raise HTTPException(status_code=409, detail="That email already has an account.")
-            role = payload.get("role") if payload.get("role") in ROLES else "Field Engineer"
+            if "role" in payload and payload.get("role") not in ROLES:
+                raise HTTPException(status_code=400, detail="Unknown role.")
+            role = canonicalize_role(payload.get("role"), "Field Engineer")
             uid = _alloc_user_id(state, seq)
             row = {
                 "id": uid,
@@ -709,7 +743,20 @@ def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[s
                 active = bool(payload["active"])
             if uid == ADMIN_ID:
                 active = True
+            requested = payload.get("role")
+            if requested is not None and requested != "" and requested not in ROLES:
+                raise HTTPException(status_code=400, detail="Unknown role.")
             if seed:
+                role = canonicalize_role((existing or seed).get("role"), seed["role"])
+                if uid == ADMIN_ID:
+                    if requested and requested != "Super Admin":
+                        raise HTTPException(
+                            status_code=400,
+                            detail="The primary Super Admin role cannot be changed.",
+                        )
+                    role = "Super Admin"
+                elif requested in ROLES:
+                    role = requested
                 row = {
                     **(existing or {}),
                     **seed,
@@ -717,7 +764,7 @@ def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[s
                     "phone": phone,
                     "active": active,
                     "email": seed["email"],
-                    "role": seed["role"],
+                    "role": role,
                     "id": uid,
                 }
             else:
@@ -731,9 +778,9 @@ def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[s
                         continue
                     if normalize_email(person.get("email")) == email:
                         raise HTTPException(status_code=409, detail="That email already has an account.")
-                role = payload.get("role") if payload.get("role") in ROLES else account.get("role") or "Field Engineer"
-                if role not in ROLES:
-                    role = "Field Engineer"
+                role = canonicalize_role(account.get("role"), "Field Engineer")
+                if requested in ROLES:
+                    role = requested
                 row = {
                     **(existing or {}),
                     "id": uid,
@@ -752,7 +799,7 @@ def upsert_user_profile(user: dict[str, Any], payload: dict[str, Any]) -> dict[s
 
 
 def add_manifest(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "Super Admin":
+    if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super Admin only.")
     project_id = str(payload.get("projectId") or "").strip()
     rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
@@ -799,7 +846,7 @@ def import_assets(user: dict[str, Any], assets: list[dict[str, Any]]) -> dict[st
         body.pop("blancco", None)
         body["blancco"] = None
         body["testedBy"] = user.get("id")
-        if user.get("role") != "Super Admin" and body.get("status") == "Verified":
+        if not can_review_all(user) and body.get("status") == "Verified":
             body["status"] = "Tested"
         try:
             saved = upsert_asset(user, body)
@@ -845,11 +892,12 @@ def apply_sync(user: dict[str, Any], upserts: dict[str, Any]) -> dict[str, Any]:
     last: dict[str, Any] = {}
     for asset in upserts.get("assets") or []:
         last = upsert_asset(user, asset)
-    if user.get("role") == "Super Admin":
+    if can_manage_projects(user):
         for client in upserts.get("clients") or []:
             last = upsert_client(user, client)
         for project in upserts.get("projects") or []:
             last = upsert_project(user, project)
+    if is_super_admin(user):
         if upserts.get("company"):
             last = upsert_company(user, upserts["company"])
         config_keys = ("categories", "testParams", "specFields", "blanccoConfig", "blanccoCategories")

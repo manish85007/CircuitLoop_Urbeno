@@ -83,6 +83,10 @@ SMTP_STARTTLS = smtp_settings()["starttls"]
 BOOTSTRAP_TOKEN = os.environ.get("BOOTSTRAP_TOKEN", "").strip()
 
 
+def on_railway() -> bool:
+    return bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
 def email_otp_enabled() -> bool:
     if preview_login_enabled():
         return True
@@ -106,7 +110,7 @@ def email_delivery_public() -> dict:
     hint = ""
     if https:
         hint = "Email OTP is sent over HTTPS."
-    elif smtp and is_production():
+    elif smtp and on_railway():
         hint = (
             "SMTP is set on this web process, but Railway Hobby/Trial blocks outbound "
             "ports 25/465/587 (Gmail SMTP cannot send). On the web service set RESEND_API_KEY, "
@@ -120,9 +124,9 @@ def email_delivery_public() -> dict:
         hint = "Preview: email codes show on the login card when SMTP/HTTPS is not configured."
     else:
         hint = (
-            "Email OTP is off. On the web service set RESEND_API_KEY "
+            "Email OTP is off. Set RESEND_API_KEY "
             "(or SENDGRID_API_KEY, or MAILGUN_API_KEY and MAILGUN_DOMAIN), "
-            "or SMTP_HOST/SMTP_USER/SMTP_PASSWORD on Railway Pro."
+            "or SMTP_HOST/SMTP_USER/SMTP_PASSWORD."
         )
     return {
         "smtpConfigured": smtp,

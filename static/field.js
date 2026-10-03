@@ -141,13 +141,17 @@ function ensureDbLists(){
  if(!DB.testParams||typeof DB.testParams!=='object')DB.testParams={};
  if(!DB.specFields||typeof DB.specFields!=='object')DB.specFields={};
 }
+function canonicalizeRole(raw){
+ const s=String(raw||'').replace(/\s+/g,' ').trim();
+ if(/super\s*admin/i.test(s))return 'Super Admin';
+ if(/lead\s*engineer/i.test(s))return 'Lead Engineer';
+ return 'Field Engineer';
+}
 function canonicalizeUser(row){
  if(!row||typeof row!=='object')return null;
  const id=row.id||row.userId;
  if(!id)return null;
- const raw=String(row.role||'');
- const role=/super\s*admin/i.test(raw)?'Super Admin':'Field Engineer';
- return {id:id,name:row.name||'',email:row.email||'',role:role,phone:row.phone||'',active:row.active!==false};
+ return {id:id,name:row.name||'',email:row.email||'',role:canonicalizeRole(row.role),phone:row.phone||'',active:row.active!==false};
 }
 function currentUser(){
  if(window.__clUser&&window.__clUser.id)return window.__clUser;
@@ -174,7 +178,7 @@ function badge(s){
  const m={'Registered':'b-gray','In Testing':'b-amber','Tested':'b-purple','Verified':'b-green','Rejected':'b-red',
   'Active':'b-teal','Planned':'b-blue','On Hold':'b-amber','Completed':'b-green','Cancelled':'b-gray',
   'A':'b-green','B':'b-blue','C':'b-amber','D':'b-red','Pass':'b-green','Fail':'b-red','N/A':'b-gray',
-  'Matched':'b-green','Missing':'b-red','Unexpected':'b-amber','Super Admin':'b-purple','Field Engineer':'b-blue',
+  'Matched':'b-green','Missing':'b-red','Unexpected':'b-amber','Super Admin':'b-purple','Lead Engineer':'b-teal','Field Engineer':'b-blue',
   'Erased':'b-green','Failed':'b-red','Pending':'b-amber','Not Applicable':'b-gray'};
  return '<span class="badge '+(m[s]||'b-gray')+'">'+esc(s)+'</span>';
 }
@@ -279,17 +283,17 @@ function blanccoOK(a){return !!(a.blancco&&a.blancco.status==='Erased');}
    ============================================================ */
 let ME=null;
 const NAV=[
- {sec:'Overview',items:[{v:'dashboard',ico:'▦',label:'Dashboard',roles:['Super Admin','Field Engineer']}]},
+ {sec:'Overview',items:[{v:'dashboard',ico:'▦',label:'Dashboard',roles:['Super Admin','Lead Engineer','Field Engineer']}]},
  {sec:'Field Work',items:[
-  {v:'testing',ico:'⌁',label:'Scan &amp; Test',roles:['Super Admin','Field Engineer']},
+  {v:'testing',ico:'⌁',label:'Scan &amp; Test',roles:['Super Admin','Lead Engineer','Field Engineer']},
   {v:'myprojects',ico:'◈',label:'My Projects',roles:['Field Engineer']}
  ]},
  {sec:'Management',items:[
-  {v:'projects',ico:'◈',label:'Projects',roles:['Super Admin']},
-  {v:'register',ico:'▤',label:'Asset Register',roles:['Super Admin']},
+  {v:'projects',ico:'◈',label:'Projects',roles:['Super Admin','Lead Engineer']},
+  {v:'register',ico:'▤',label:'Asset Register',roles:['Super Admin','Lead Engineer']},
   {v:'blancco',ico:'🛡',label:'Blancco Erasure',roles:['Super Admin']},
   {v:'reconcile',ico:'⇄',label:'Reconciliation',roles:['Super Admin']},
-  {v:'reports',ico:'⎙',label:'Reports',roles:['Super Admin']}
+  {v:'reports',ico:'⎙',label:'Reports',roles:['Super Admin','Lead Engineer']}
  ]},
  {sec:'Administration',items:[
   {v:'masters',ico:'⚒',label:'Masters',roles:['Super Admin']},
@@ -303,11 +307,14 @@ function allowedViews(){
  const out=[];NAV.forEach(g=>g.items.forEach(i=>{if(i.roles.includes(role))out.push(i.v);}));return out;
 }
 function canEdit(){const user=currentUser();return user&&user.role==='Super Admin';}
+function isReviewer(){const user=currentUser();return user&&(user.role==='Super Admin'||user.role==='Lead Engineer');}
+function canVerify(){return isReviewer();}
+function canManageProjects(){return isReviewer();}
 function myProjects(){
  ensureDbLists();
  const list=Array.isArray(DB.projects)?DB.projects:[];
  const user=currentUser();
- if(!user||user.role==='Super Admin')return list;
+ if(!user||isReviewer())return list;
  return list.filter(p=> ((p&&p.team)||[]).includes(user.id)||(p&&p.managerId===user.id));
 }
 function myProjectIds(){return myProjects().map(p=>p.id);}
@@ -315,7 +322,7 @@ function visibleAssets(){
  ensureDbLists();
  const list=Array.isArray(DB.assets)?DB.assets:[];
  const user=currentUser();
- if(!user||user.role==='Super Admin')return list;
+ if(!user||isReviewer())return list;
  const ids=myProjectIds();
  return list.filter(a=>ids.includes(a.projectId));
 }
@@ -367,7 +374,7 @@ function enterField(user){
 function paintNav(role){
  const nav=document.getElementById('nav');
  if(!nav)return;
- const r=/super\s*admin/i.test(String(role||''))?'Super Admin':'Field Engineer';
+ const r=canonicalizeRole(role);
  const html=NAV.map(g=>{
   const items=g.items.filter(i=>i.roles.includes(r));
   if(!items.length)return '';
@@ -545,10 +552,10 @@ let TEST_FILTER='open';
 VIEWS.testing={title:'Scan &amp; Test',crumb:'Barcode or serial entry, category test parameters, grading',
 render(){
  const projs=myProjects().filter(p=>p&&['Active','Planned'].includes(p.status));
- if(!projs.length)return '<div class="warn">No active projects are assigned to you. A Super Admin needs to create a project and add you to its team.</div>';
+ if(!projs.length)return '<div class="warn">No active projects are assigned to you. A Lead Engineer or Super Admin needs to create a project and add you to its team.</div>';
  if(!ACTIVE_PROJECT||!projs.some(p=>p.id===ACTIVE_PROJECT))ACTIVE_PROJECT=projs[0].id;
  const p=projectById(ACTIVE_PROJECT);
- if(!p)return '<div class="warn">The selected project is not in this register. Pick another project, or ask a Super Admin to assign you.</div>';
+ if(!p)return '<div class="warn">The selected project is not in this register. Pick another project, or ask a Lead Engineer or Super Admin to assign you.</div>';
  const mine=(Array.isArray(DB.assets)?DB.assets:[]).filter(a=>a.projectId===p.id);
  const open=mine.filter(a=>['Registered','In Testing','Rejected'].includes(a.status));
  const done=mine.filter(a=>['Tested','Verified'].includes(a.status));
@@ -891,8 +898,8 @@ function openTest(id){
      <div><label class="f">Model</label><input value="${esc(a.model==='—'?'':a.model)}" placeholder="Latitude 5540" onchange="patchMakeModel('${a.id}','model',this.value)"></div>
    </div>
    <div class="muted" style="margin-bottom:10px">${esc(a.usn)} · ${esc(projectName(a.projectId))}${a.assetTag?' · tag '+esc(a.assetTag):''} · <span class="linklike" onclick="editAssetDetails('${a.id}','openTest')">Edit all device details</span></div>
-   ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by Super Admin:</b> ${esc(a.rejectNote||'')}</div>`:''}
-   ${a.status==='Verified'?`<div class="okbox">Verified and locked (grade ${esc(a.grade||'')}). Super Admin can reopen for re-verification; the grade stays frozen until verified again.</div>`:''}
+   ${a.status==='Rejected'?`<div class="errbox">↩ <b>Returned by reviewer:</b> ${esc(a.rejectNote||'')}</div>`:''}
+   ${a.status==='Verified'?`<div class="okbox">Verified and locked (grade ${esc(a.grade||'')}). A Lead Engineer or Super Admin can reopen for re-verification; the grade stays frozen until verified again.</div>`:''}
    ${isNoSerialValue(a.serial)
      ? `<div class="info">No factory serial — physical / no-power check (<b>${esc(a.serial)}</b>). Record cosmetic grade and every parameter. Mark <b>Powers on</b> Fail if the unit has no power. Blancco is not required to submit.</div>`
      : blanccoEligible(a)?(a.blancco
@@ -934,7 +941,7 @@ function openTest(id){
    <button class="btn" onclick="assetLabel('${a.id}')">🏷 Label</button>
    <button class="btn" onclick="editAssetDetails('${a.id}','openTest')">Edit details</button>
    <button class="btn" onclick="closeModal();rerender()">Close</button>
-   ${a.status==='Verified'&&canEdit()?`<button class="btn" onclick="reopenVerified('${a.id}')">Reopen for re-verification</button>`:''}
+   ${a.status==='Verified'&&canVerify()?`<button class="btn" onclick="reopenVerified('${a.id}')">Reopen for re-verification</button>`:''}
    ${a.status==='Tested'||a.status==='Verified'?'':`<button class="btn btn-p" onclick="submitTest('${a.id}')">Submit for verification</button>`}
  </div>`,true);
 }
@@ -970,7 +977,7 @@ function setRemarks(v){
  a.remarks=String(v||'').slice(0,500);persistHint();
 }
 function reopenVerified(id){
- if(!canEdit()){toast('Only a Super Admin can reopen a verified asset.');return;}
+ if(!canVerify()){toast('Only a Lead Engineer or Super Admin can reopen a verified asset.');return;}
  const a=DB.assets.find(x=>x.id===id);if(!a)return;
  a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;a.gradeFrozen=true;
  a.status='In Testing';a.verifiedBy=null;a.verifiedAt=null;
@@ -1002,7 +1009,7 @@ function submitTest(id){
  recomputeGrade(a);
  a.history.push({ts:stamp(),by:ME.name,ev:'Submitted for verification — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:' · no Blancco report')});
  closeModal();rerender();
- toast(a.serial+' submitted — grade '+a.grade+'. Awaiting Super Admin verification.');
+ toast(a.serial+' submitted — grade '+a.grade+'. Awaiting Lead Engineer or Super Admin verification.');
 }
 function patchMakeModel(id,key,val){
  const a=DB.assets.find(x=>x.id===id);if(!a)return;
@@ -1036,7 +1043,7 @@ function editAssetDetails(id,back){
  const a=DB.assets.find(x=>x.id===id);if(!a)return;
  window.EDITING_ID=id;
  const backFn=back==='assetDetail'?'assetDetail':'openTest';
- const projs=(ME&&ME.role==='Super Admin'?DB.projects:myProjects()).slice();
+ const projs=(isReviewer()?DB.projects:myProjects()).slice();
  if(a.projectId&&!projs.some(p=>p.id===a.projectId)){
   const cur=projectById(a.projectId);if(cur)projs.unshift(cur);
  }
@@ -1077,7 +1084,7 @@ function refreshEditSpecs(){
 function saveAssetDetails(id,backFn){
  let a=DB.assets.find(x=>x.id===id);if(!a)return;
  if(a.status==='Verified'){
-  if(!canEdit()){toast('Verified assets are locked.');return;}
+  if(!canVerify()){toast('Verified assets are locked.');return;}
   reopenVerified(id);
   a=DB.assets.find(x=>x.id===id);
  }
@@ -1299,7 +1306,7 @@ function editProject(id){
    <div><label class="f">Due date</label><input id="pj_due" type="date" value="${p?p.due:today()}"></div>
    <div><label class="f">Status</label><select id="pj_status">${['Planned','Active','On Hold','Completed','Cancelled'].map(s=>`<option ${p&&p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
   </div>
-  <label class="f">Project manager</label><select id="pj_mgr">${DB.users.filter(u=>u.role==='Super Admin').map(u=>`<option value="${u.id}" ${p&&p.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
+  <label class="f">Project manager</label><select id="pj_mgr">${DB.users.filter(u=>u.role==='Super Admin'||u.role==='Lead Engineer').map(u=>`<option value="${u.id}" ${p&&p.managerId===u.id?'selected':''}>${esc(u.name)} · ${esc(u.role)}</option>`).join('')}</select>
   <label class="f">Assign team (field engineers)</label>
   <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;max-height:140px;overflow:auto">
    ${engs.filter(u=>u.role==='Field Engineer').map(u=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0">
@@ -1465,14 +1472,16 @@ function assetDetail(id){
   <button class="btn" onclick="closeModal()">Close</button></div>`,true);
 }
 function verifyAsset(id){
+ if(!canVerify()){toast('Only a Lead Engineer or Super Admin can verify.');return;}
  const a=DB.assets.find(x=>x.id===id);
  if(!isTestComplete(a)){toast('Cannot verify '+a.serial+': test parameters incomplete');return;}
  a.status='Verified';a.verifiedBy=ME.id;a.verifiedAt=today();a.rejectNote='';
  a.gradeFrozen=true;a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;
- a.history.push({ts:stamp(),by:ME.name,ev:'Verified by Super Admin — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:'')});
+ a.history.push({ts:stamp(),by:ME.name,ev:'Verified by '+(ME.role||'reviewer')+' — grade '+a.grade+(a.blancco?' · Blancco '+a.blancco.reportId:'')});
  closeModal();rerender();toast(a.serial+' verified (grade '+a.grade+')');
 }
 function rejectAsset(id){
+ if(!canVerify()){toast('Only a Lead Engineer or Super Admin can reject.');return;}
  const a=DB.assets.find(x=>x.id===id);
  openModal(`<div class="modal-h"><h3>✗ Reject ${esc(a.serial)}</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b"><div class="muted" style="margin-bottom:8px">${esc(a.brand)} ${esc(a.model)} · tested by ${esc(userName(a.testedBy))}</div>
@@ -1482,6 +1491,7 @@ function rejectAsset(id){
   <button class="btn btn-danger" onclick="saveReject('${id}')">Reject &amp; return</button></div>`);
 }
 function saveReject(id){
+ if(!canVerify()){toast('Only a Lead Engineer or Super Admin can reject.');return;}
  const a=DB.assets.find(x=>x.id===id);
  a.rejectNote=String($('#rj_note').value||'').trim()||'No reason given';
  a.status='Rejected';
@@ -1489,6 +1499,7 @@ function saveReject(id){
  closeModal();rerender();toast(a.serial+' returned to '+userName(a.testedBy));
 }
 function bulkVerify(){
+ if(!canVerify()){toast('Only a Lead Engineer or Super Admin can verify.');return;}
  let n=0,skip=0;
  const shown=new Set();
  $$('#regbody tr').forEach(tr=>{
@@ -1703,7 +1714,7 @@ function exportReconCSV(){
    ============================================================ */
 VIEWS.dashboard={title:'Dashboard',crumb:'Testing status by project until completion',
 render(){
- const admin=ME.role==='Super Admin';
+ const admin=isReviewer();
  const ps=myProjects();
  const open=ps.filter(p=>p.status!=='Completed'&&p.status!=='Cancelled');
  const assets=visibleAssets();
@@ -1745,7 +1756,7 @@ render(){
  <div class="grid2">
   <div class="card"><div class="card-h"><h3>Assets by category</h3></div><div class="card-b"><div class="chartbox"><canvas id="chCat"></canvas></div></div></div>
   <div class="card"><div class="card-h"><h3>Attention needed</h3></div><div class="card-b" style="font-size:13px">
-   ${pendVerify?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🟣 <b>${pendVerify}</b> asset(s) awaiting verification ${admin?'— <span class="linklike" onclick="show(\'register\')">open register</span>':'(with the Super Admin)'}</div>`:''}
+   ${pendVerify?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🟣 <b>${pendVerify}</b> asset(s) awaiting verification ${admin?'— <span class="linklike" onclick="show(\'register\')">open register</span>':'(with a Lead Engineer or Super Admin)'}</div>`:''}
    ${assets.filter(a=>a.status==='Rejected').length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🔴 <b>${assets.filter(a=>a.status==='Rejected').length}</b> rejected asset(s) need rework — <span class="linklike" onclick="show('testing')">open testing queue</span></div>`:''}
    ${lapsMissing?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">🛡 <b>${lapsMissing}</b> opted-in laptop(s) without a Blancco report ${admin?'— <span class="linklike" onclick="show(\'blancco\')">pull now</span>':''} (optional, does not block submit)</div>`:''}
    ${open.filter(p=>p.due<today()).length?`<div style="padding:6px 0;border-bottom:1px solid var(--line)">⏰ <b>${open.filter(p=>p.due<today()).length}</b> project(s) past due date</div>`:''}
@@ -2056,7 +2067,7 @@ function saveCompany(){
 /* ============================================================
    USERS (Super Admin)
    ============================================================ */
-VIEWS.usersadmin={title:'Users',crumb:'Super Admins and Field Engineers',
+VIEWS.usersadmin={title:'Users',crumb:'Access levels — Super Admin, Lead Engineer, Field Engineer',
 render(){
  const rows=(DB.users||[]).map(u=>{
   const caps=(DB.assets||[]).filter(a=>a.testedBy===u.id).length;
@@ -2074,10 +2085,11 @@ render(){
  return `
  <div class="kpis">
   <div class="kpi purple"><div class="lbl">Super Admins</div><div class="val">${(DB.users||[]).filter(u=>u.role==='Super Admin').length}</div></div>
+  <div class="kpi teal"><div class="lbl">Lead Engineers</div><div class="val">${(DB.users||[]).filter(u=>u.role==='Lead Engineer').length}</div></div>
   <div class="kpi blue"><div class="lbl">Field Engineers</div><div class="val">${(DB.users||[]).filter(u=>u.role==='Field Engineer').length}</div></div>
-  <div class="kpi teal"><div class="lbl">Active</div><div class="val">${(DB.users||[]).filter(u=>u.active).length}</div></div>
+  <div class="kpi green"><div class="lbl">Active</div><div class="val">${(DB.users||[]).filter(u=>u.active).length}</div></div>
  </div>
- <div class="info"><b>Roles:</b> Field Engineers see only the dashboard for their own projects, the scan &amp; test screen, and their assigned project list — they can add assets and record test parameters, nothing else. Super Admins have every module, including verification, masters, Blancco configuration and reports. New people cannot self-enroll from the login page — send an authenticator invite. CircuitLoop does not store a password.</div>
+ <div class="info"><b>Roles:</b> Field Engineers capture and test on assigned projects. Lead Engineers create projects, assign Field Engineers, and verify every field capture. Super Admins also hold Users, Masters and Blancco configuration. Change an existing person’s access from Edit — they pick up the new role on the next screen load. New people cannot self-enroll from the login page — send an authenticator invite. CircuitLoop does not store a password.</div>
  <div class="card"><div class="card-h"><h3>All users</h3>
   <button class="btn btn-p btn-sm" data-act="addUser">+ Add user</button></div>
   <div class="tblwrap"><table><thead><tr><th>User</th><th>Role</th><th>Phone</th><th>Projects</th><th>Assets captured</th><th>State</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7" class="muted">No users yet.</td></tr>'}</tbody></table></div></div>`;
@@ -2085,15 +2097,21 @@ render(){
 function editUser(id){
  const u=id?(DB.users||[]).find(x=>x.id===id):null;
  if(id&&!u){toast('User not found');return;}
- const locked=!!(u&&(u.id==='U-1'||u.id==='U-2'));
+ const primary=!!(u&&u.id==='U-1');
+ const seedEmail=!!(u&&(u.id==='U-1'||u.id==='U-2'));
+ const role=u?canonicalizeRole(u.role):'Field Engineer';
  openModal(`<div class="modal-h"><h3>${u?'Edit user':'Add user'}</h3><button class="x" data-act="closeModal">×</button></div>
  <div class="modal-b">
   <div class="frow"><div><label class="f">Full name</label><input id="us_name" value="${u?esc(u.name):''}"></div>
-   <div><label class="f">Role</label><select id="us_role" ${locked?'disabled':''}><option value="Super Admin" ${u&&u.role==='Super Admin'?'selected':''}>Super Admin</option><option value="Field Engineer" ${!u||u.role!=='Super Admin'?'selected':''}>Field Engineer</option></select></div></div>
-  <div class="frow"><div><label class="f">Email</label><input id="us_email" type="email" ${locked?'disabled':''} value="${u?esc(u.email):''}" placeholder="name@urbeno.in"></div>
+   <div><label class="f">Access level</label><select id="us_role" ${primary?'disabled':''}>
+    <option value="Super Admin" ${role==='Super Admin'?'selected':''}>Super Admin</option>
+    <option value="Lead Engineer" ${role==='Lead Engineer'?'selected':''}>Lead Engineer</option>
+    <option value="Field Engineer" ${role==='Field Engineer'?'selected':''}>Field Engineer</option>
+   </select></div></div>
+  <div class="frow"><div><label class="f">Email</label><input id="us_email" type="email" ${seedEmail?'disabled':''} value="${u?esc(u.email):''}" placeholder="name@urbeno.in"></div>
    <div><label class="f">Phone</label><input id="us_phone" value="${u?esc(u.phone||''):''}"></div></div>
   <div class="${u?'muted':'info'}" style="font-size:12px;margin-top:10px">${u
-    ?(locked?'Built-in account — email and role stay on the server. Name and phone can be updated.':'They sign in with this email and an authenticator app. Changing email does not move an existing authenticator enrollment.')
+    ?(primary?'Primary Super Admin — email and access level stay on the server. Name and phone can be updated.':(seedEmail?'Built-in login email stays on the server. Access level, name and phone can be updated.':'They sign in with this email and an authenticator app. Changing access level takes effect immediately. Changing email does not move an existing authenticator enrollment.'))
     :'They sign in with this email after you send an authenticator invite. They scan the QR from that invite and confirm a 6-digit code. No password is stored.'}</div>
  </div>
  <div class="modal-f"><button class="btn" data-act="closeModal">Cancel</button>
