@@ -189,9 +189,11 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod16" in html
+    assert "persist.js?v=prod17" in html
     assert "qrcode.min.js?v=prod15" in html
     assert "field.js?v=prod16" in html
+    assert "not a QR from this card" not in html
+    assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -208,7 +210,8 @@ def test_index_production_login(client):
     assert "New users cannot be added" not in field.text
     persist = client.get("/static/persist.js")
     assert persist.status_code == 200
-    assert "emailDelivery" in persist.text
+    assert "emailOtp" in persist.text
+    assert "/api/health" in persist.text
     assert "/api/auth/start" in persist.text
     assert "auth_qr" in persist.text
     assert "Email me a code" in persist.text

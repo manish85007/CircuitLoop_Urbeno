@@ -372,10 +372,8 @@
       '<form id="authform" novalidate>' +
         '<label class="f">Work email</label>' +
         '<input id="auth_email" type="email" autocomplete="username" required placeholder="you@urbeno.in">' +
-        '<div id="auth_hint" class="warn" style="margin-top:12px">If you already enrolled, continue with your authenticator. First sign-in needs an invite a Super Admin sent you — not a QR from this card.</div>' +
+        '<div id="auth_hint" class="info" style="display:none;margin-top:12px"></div>' +
         '<div id="auth_extra"></div>' +
-        '<label class="f" style="margin-top:12px">Authenticator invite (first sign-in)</label>' +
-        '<input id="auth_invite" type="text" autocomplete="off" placeholder="Paste the invite token">' +
         '<button class="btn btn-p" type="submit" style="width:100%;justify-content:center;margin-top:14px" id="auth_go">Continue with authenticator</button>' +
         '<button class="btn" type="button" style="width:100%;justify-content:center;margin-top:8px" id="auth_email_btn" disabled>Email me a code</button>' +
         '<div class="muted" id="auth_msg" style="font-size:12px;margin-top:12px"></div>' +
@@ -389,37 +387,20 @@
     const go = form.querySelector("#auth_go");
     const emailBtn = form.querySelector("#auth_email_btn");
     const hint = form.querySelector("#auth_hint");
-    const inviteInput = form.querySelector("#auth_invite");
     const fromLink = inviteFromLocation();
     if (fromLink.email && !email.value) email.value = fromLink.email;
-    if (fromLink.invite && inviteInput) inviteInput.value = fromLink.invite;
     let phase = "pick";
     let emailOtpLive = false;
-    let emailHint = "";
+    let savedInvite = fromLink.invite || "";
 
     function setHint() {
-      if (!hint) return;
-      if (emailOtpLive) {
-        hint.className = emailHint && /Railway|RESEND|blocked/i.test(emailHint) ? "warn" : "info";
-        hint.style.marginTop = "12px";
-        hint.textContent =
-          emailHint ||
-          "Choose authenticator (Google Authenticator / Authy / 1Password) or email a 6-digit code.";
-        emailBtn.disabled = false;
-      } else {
-        hint.className = "warn";
-        hint.style.marginTop = "12px";
-        hint.textContent =
-          emailHint ||
-          "Authenticator is the working factor if you already enrolled. First-time setup uses a Super Admin invite, not a QR from this card.";
-        emailBtn.disabled = true;
-      }
+      if (hint) hint.style.display = "none";
+      emailBtn.disabled = !emailOtpLive || emailBtn.style.display === "none";
     }
 
     api("GET", "/api/health")
       .then(function (h) {
         emailOtpLive = !!(h && h.emailOtp);
-        emailHint = (h && h.emailDelivery && h.emailDelivery.hint) || "";
         setHint();
       })
       .catch(function () {
@@ -450,6 +431,52 @@
 
     function hideHint() {
       if (hint) hint.style.display = "none";
+    }
+
+    function currentInvite() {
+      const field = extra.querySelector("#auth_invite");
+      if (field && field.value) savedInvite = String(field.value || "").trim();
+      return savedInvite || fromLink.invite || "";
+    }
+
+    function renderPick() {
+      phase = "pick";
+      hideHint();
+      extra.innerHTML =
+        '<div class="muted" style="font-size:12px;margin-top:10px;text-align:center">' +
+        '<span class="linklike" id="auth_have_invite">First sign-in — paste invite token</span></div>';
+      const link = extra.querySelector("#auth_have_invite");
+      if (link) {
+        link.addEventListener("click", function () {
+          renderInvite();
+        });
+      }
+      go.textContent = "Continue with authenticator";
+      showPrimaryActions(true);
+      setHint();
+      showInfo("");
+    }
+
+    function renderInvite() {
+      phase = "invite";
+      hideHint();
+      extra.innerHTML =
+        '<label class="f" style="margin-top:12px">Super Admin invite</label>' +
+        '<input id="auth_invite" type="text" autocomplete="off" placeholder="Paste the invite token">' +
+        '<div class="muted" style="font-size:12px;margin-top:8px">Authenticator setup is on the next screen.</div>' +
+        '<div class="muted" style="font-size:12px;margin-top:8px;text-align:center"><span class="linklike" id="auth_back_pick">Back</span></div>';
+      const field = extra.querySelector("#auth_invite");
+      if (field) field.value = savedInvite || fromLink.invite || "";
+      const back = extra.querySelector("#auth_back_pick");
+      if (back) {
+        back.addEventListener("click", function () {
+          renderPick();
+        });
+      }
+      go.textContent = "Continue";
+      showPrimaryActions(false);
+      showInfo("");
+      if (field) field.focus();
     }
 
     function renderEnroll(pending) {
@@ -519,18 +546,23 @@
         const pending = await api("POST", "/api/auth/start", {
           email: addr,
           method: method,
-          inviteToken: (inviteInput && inviteInput.value) || fromLink.invite || "",
+          inviteToken: currentInvite(),
         });
         phase = pending.factor || "totp";
         extra.innerHTML = "";
         if (phase === "enroll") renderEnroll(pending);
         else renderCode(pending, phase);
       } catch (err) {
-        showError(err.message);
-        emailBtn.disabled = !emailOtpLive;
+        const text = (err && err.message) || "Sign-in failed.";
+        if (phase === "pick" && /invite/i.test(text)) {
+          renderInvite();
+        }
+        showError(text);
+        emailBtn.disabled = !emailOtpLive || emailBtn.style.display === "none";
       } finally {
         setBusy(false);
         if (phase === "enroll") go.textContent = "Confirm authenticator";
+        else if (phase === "invite") go.textContent = "Continue";
         else if (phase === "pick") go.textContent = "Continue with authenticator";
         else go.textContent = "Verify and sign in";
       }
@@ -545,6 +577,15 @@
         return;
       }
       if (phase === "pick") {
+        await startWith("totp");
+        return;
+      }
+      if (phase === "invite") {
+        savedInvite = currentInvite();
+        if (!savedInvite) {
+          showError("Paste the Super Admin invite token.");
+          return;
+        }
         await startWith("totp");
         return;
       }
@@ -576,9 +617,8 @@
       await startWith("email");
     });
 
-    if (fromLink.invite && email.value) {
-      startWith("totp");
-    }
+    if (fromLink.invite) renderInvite();
+    else renderPick();
   }
 
   function sessionUserFrom(payload) {

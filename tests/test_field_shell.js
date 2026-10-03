@@ -22,7 +22,7 @@ assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
 assert(html.includes("field.js?v=prod16"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod16"), "prod16 cache bust");
+assert(html.includes("persist.js?v=prod17"), "prod17 cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
