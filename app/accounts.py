@@ -63,10 +63,18 @@ def account_for_id(user_id: str | None) -> dict[str, Any] | None:
 
 
 def public_user(row: dict[str, Any], *, include_contact: bool = True) -> dict[str, Any]:
+    role = str(row.get("role") or "").strip()
+    compact = " ".join(role.split()).lower().replace(" ", "")
+    if compact == "superadmin":
+        role = "Super Admin"
+    elif compact == "leadengineer":
+        role = "Lead Engineer"
+    elif compact == "fieldengineer":
+        role = "Field Engineer"
     out = {
         "id": row.get("id"),
         "name": row.get("name"),
-        "role": row.get("role"),
+        "role": role or "Field Engineer",
         "active": row.get("active", True),
     }
     if include_contact:
