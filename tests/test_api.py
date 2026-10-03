@@ -1,13 +1,25 @@
+import json
+
 import pyotp
 
+from app.auth import mint_enroll_invite, totp_enrolled
+from app.config import AUTH_PATH
 from app.store import empty_production_state, load_state
 
 
 def enroll_and_login(client, email="manish@urbeno.in"):
-    start = client.post("/api/auth/start", json={"email": email})
+    if totp_enrolled(email):
+        secret = json.loads(AUTH_PATH.read_text())["users"][email]["totpSecret"]
+        verify = client.post("/api/auth/verify", json={"email": email, "code": pyotp.TOTP(secret).now()})
+        assert verify.status_code == 200, verify.text
+        assert verify.json()["user"]["email"] == email
+        return verify.json()["user"]
+    token = mint_enroll_invite(email)
+    start = client.post("/api/auth/start", json={"email": email, "inviteToken": token})
     assert start.status_code == 200, start.text
     body = start.json()
     assert body["factor"] == "enroll"
+    assert body.get("secret")
     code = pyotp.TOTP(body["secret"]).now()
     verify = client.post("/api/auth/verify", json={"email": email, "code": code})
     assert verify.status_code == 200, verify.text
@@ -177,9 +189,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod15" in html
+    assert "persist.js?v=prod16" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod15" in html
+    assert "field.js?v=prod16" in html
     assert "integrity=" in html
     field = client.get("/static/field.js")
     assert field.status_code == 200
@@ -203,7 +215,7 @@ def test_index_production_login(client):
     assert "openFieldApp" in persist.text
     assert "sessionUserFrom" in persist.text
     assert "Signing in" in persist.text
-    assert "we will not send a fake code" in persist.text
+    assert "Super Admin invite" in persist.text
     assert "previewCode" in persist.text
     assert "Email a new code" in persist.text
     assert "enterField" in persist.text
@@ -219,6 +231,13 @@ def test_index_production_login(client):
     assert "Object.assign(DB, dbSeed, state)" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
+    assert "Set up a new authenticator QR" not in persist.text
+    assert "auth_invite" in persist.text
+    assert "inviteToken" in persist.text
+    assert "Send invite" in field.text
+    assert "Reset authenticator" in field.text
+    assert "Replace authenticator" in field.text
+    assert "Set up a new authenticator QR" not in html
     qr = client.get("/static/qrcode.min.js")
     assert qr.status_code == 200
     assert b"qrcode" in qr.content[:80]
@@ -409,13 +428,14 @@ def test_smtp_transport_tries_ssl_then_submission():
 
 
 def test_enroll_reuses_secret_and_survives_memory_clear(client):
-    first = client.post("/api/auth/start", json={"email": "manish@urbeno.in"})
+    token = mint_enroll_invite("manish@urbeno.in")
+    first = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "inviteToken": token})
     assert first.status_code == 200
     body = first.json()
     assert body["factor"] == "enroll"
     assert body["otpauth"].startswith("otpauth://totp/")
     secret = body["secret"]
-    second = client.post("/api/auth/start", json={"email": "manish@urbeno.in"})
+    second = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "inviteToken": token})
     assert second.json()["secret"] == secret
     from app import auth as auth_mod
 
@@ -482,7 +502,13 @@ def test_old_totp_still_works_during_reenroll(client):
     import json
 
     old = json.loads(AUTH_PATH.read_text())["users"]["manish@urbeno.in"]["totpSecret"]
-    reset = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "enroll"})
+    blocked = client.post("/api/auth/start", json={"email": "manish@urbeno.in", "method": "enroll"})
+    assert blocked.status_code == 403
+    assert "secret" not in blocked.json()
+    reset = client.post(
+        "/api/auth/rotate",
+        json={"email": "manish@urbeno.in", "code": pyotp.TOTP(old).now()},
+    )
     assert reset.status_code == 200
     assert reset.json()["factor"] == "enroll"
     assert reset.json()["secret"] != old
@@ -541,8 +567,17 @@ def test_super_admin_adds_user_who_can_enroll(client):
         json={"name": "Priya 2", "email": "priya@urbeno.in", "role": "Field Engineer"},
     )
     assert dup.status_code == 409
+    invite = created.json().get("invite") or {}
+    assert invite.get("inviteToken")
+    assert invite.get("email") == "priya@urbeno.in"
     client.delete("/api/session")
-    start = client.post("/api/auth/start", json={"email": "priya@urbeno.in"})
+    denied = client.post("/api/auth/start", json={"email": "priya@urbeno.in"})
+    assert denied.status_code == 403
+    assert "secret" not in denied.json()
+    start = client.post(
+        "/api/auth/start",
+        json={"email": "priya@urbeno.in", "inviteToken": invite["inviteToken"]},
+    )
     assert start.status_code == 200, start.text
     assert start.json()["factor"] == "enroll"
     code = pyotp.TOTP(start.json()["secret"]).now()

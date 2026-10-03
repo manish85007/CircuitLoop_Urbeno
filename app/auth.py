@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import json
 import secrets
 import smtplib
@@ -9,6 +10,7 @@ import socket
 import ssl
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -25,11 +27,11 @@ from app.accounts import ADMIN_EMAIL, account_for_email, account_for_id, normali
 from app.audit import append_audit
 from app.config import (
     AUTH_PATH,
-    BOOTSTRAP_TOKEN,
     COOKIE_NAME,
     SESSION_HOURS,
     SESSION_SECRET,
     cookie_secure,
+    cors_origin_list,
     email_otp_enabled,
     ensure_dirs,
     http_mail_settings,
@@ -48,6 +50,8 @@ _attempts: dict[str, list[float]] = {}
 # ±90s of clock skew (three 30s TOTP steps including current).
 TOTP_WINDOW = 2
 RATE_WINDOW_SEC = 900
+INVITE_TTL_SEC = 48 * 3600
+PENDING_KINDS = frozenset({"invite", "rotate"})
 # Super Admin must not be stranded by lockout; still cap brute-force.
 ADMIN_START_LIMIT = 40
 ADMIN_VERIFY_LIMIT = 80
@@ -164,35 +168,167 @@ def _store_challenge(email: str, challenge: dict[str, Any] | None) -> None:
     _put_user_auth(addr, {"otpChallenge": challenge})
 
 
-def _require_bootstrap(bootstrap_token: str) -> None:
-    if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN:
+def _hash_invite(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def _clear_pending(addr: str, extra: dict[str, Any] | None = None) -> None:
+    patch: dict[str, Any] = {
+        "totpPendingSecret": None,
+        "totpPendingAt": None,
+        "totpPendingKind": None,
+    }
+    if extra:
+        patch.update(extra)
+    _put_user_auth(addr, patch)
+
+
+def _invite_row(rec: dict[str, Any]) -> dict[str, Any]:
+    row = rec.get("enrollInvite")
+    return dict(row) if isinstance(row, dict) else {}
+
+
+def public_origin() -> str:
+    for origin in cors_origin_list():
+        text = str(origin or "").strip().rstrip("/")
+        if "loop.urbeno.in" in text:
+            return text
+    origins = [o.strip().rstrip("/") for o in cors_origin_list() if o.strip() and o.strip() != "*"]
+    return origins[0] if origins else "https://loop.urbeno.in"
+
+
+def invite_url(email: str, token: str) -> str:
+    addr = normalize_email(email)
+    query = urllib.parse.urlencode({"email": addr})
+    return public_origin() + "/?" + query + "#invite=" + urllib.parse.quote(token, safe="")
+
+
+def mint_enroll_invite(email: str, *, actor_id: str = "", purpose: str = "first") -> str:
+    addr = normalize_email(email)
+    token = secrets.token_urlsafe(32)
+    _put_user_auth(
+        addr,
+        {
+            "enrollInvite": {
+                "hash": _hash_invite(token),
+                "exp": time.time() + INVITE_TTL_SEC,
+                "issuedAt": _utc(),
+                "issuedBy": actor_id or "",
+                "purpose": purpose if purpose in {"first", "reset"} else "first",
+            }
+        },
+    )
+    return token
+
+
+def issue_enroll_invite(admin: dict[str, Any], email: str, *, purpose: str = "first") -> dict[str, Any]:
+    if not admin or admin.get("role") != "Super Admin":
+        raise HTTPException(status_code=403, detail="Super Admin only.")
+    addr = normalize_email(email)
+    account = _resolve_login_account(email=addr)
+    if account is None or account.get("active") is False:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if purpose == "first" and totp_enrolled(addr):
         raise HTTPException(
-            status_code=401,
-            detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
+            status_code=409,
+            detail="This account already has an authenticator. Use Reset authenticator.",
         )
-
-
-def _pending_or_new_secret(addr: str, bootstrap_token: str, *, replace: bool) -> str:
+    if purpose == "reset":
+        bump_session_version(addr)
+        _put_user_auth(
+            addr,
+            {
+                "totpSecret": None,
+                "totpConfirmed": False,
+                "totpPendingSecret": None,
+                "totpPendingAt": None,
+                "totpPendingKind": None,
+            },
+        )
+    token = mint_enroll_invite(addr, actor_id=str(admin.get("id") or ""), purpose=purpose)
+    emailed = False
+    url = invite_url(addr, token)
+    try:
+        emailed = bool(
+            _send_email(
+                addr,
+                "CircuitLoop authenticator invite",
+                "A Super Admin invited you to set up a CircuitLoop authenticator.\n\n"
+                "Open this link on a trusted device (it expires in 48 hours):\n"
+                + url
+                + "\n\nIf you did not expect this, tell a Super Admin.\n",
+            )
+        )
+    except Exception:
+        emailed = False
+    append_audit(admin, "auth.invite", "session", addr, purpose + (" emailed" if emailed else ""))
     rec = _user_auth(addr)
+    inv = _invite_row(rec)
+    return {
+        "ok": True,
+        "email": addr,
+        "userId": account.get("id"),
+        "inviteToken": token,
+        "inviteUrl": url,
+        "expiresAt": _utc_from_epoch(float(inv.get("exp") or 0)),
+        "emailed": emailed,
+        "purpose": purpose,
+    }
+
+
+def _utc_from_epoch(exp: float) -> str:
+    if not exp:
+        return ""
+    return datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pending_secret_for_invite(addr: str, invite_token: str) -> str:
+    rec = _user_auth(addr)
+    inv = _invite_row(rec)
+    stored = str(inv.get("hash") or "")
+    token = str(invite_token or "").strip()
+    if not stored or not token or len(stored) != 64:
+        raise HTTPException(status_code=401, detail="That invite is not valid or has expired.")
+    if not secrets.compare_digest(stored, _hash_invite(token)):
+        raise HTTPException(status_code=401, detail="That invite is not valid or has expired.")
+    try:
+        exp = float(inv.get("exp") or 0)
+    except (TypeError, ValueError):
+        exp = 0
+    if exp < time.time():
+        raise HTTPException(status_code=401, detail="That invite is not valid or has expired.")
+    purpose = str(inv.get("purpose") or "first")
+    if totp_enrolled(addr) and purpose != "reset":
+        raise HTTPException(
+            status_code=409,
+            detail="This account already has an authenticator. Ask a Super Admin to reset it.",
+        )
     pending = str(rec.get("totpPendingSecret") or "").strip()
-    if pending:
+    if pending and rec.get("totpPendingKind") == "invite":
         return pending
-    if rec.get("totpConfirmed") and rec.get("totpSecret") and not replace:
-        return str(rec["totpSecret"])
-    unconfirmed = str(rec.get("totpSecret") or "").strip() if not rec.get("totpConfirmed") else ""
-    if unconfirmed:
-        _put_user_auth(addr, {"totpPendingSecret": unconfirmed})
-        return unconfirmed
-    _require_bootstrap(bootstrap_token)
     secret = pyotp.random_base32()
     _put_user_auth(
         addr,
         {
             "totpPendingSecret": secret,
             "totpPendingAt": _utc(),
+            "totpPendingKind": "invite",
         },
     )
     return secret
+
+
+def _enroll_payload(addr: str, secret: str, enrolled: bool, email_on: bool, message: str) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "email": addr,
+        "factor": "enroll",
+        "emailOtp": email_on,
+        "totpEnrolled": enrolled,
+        "secret": secret,
+        "otpauth": _otpauth(secret, addr),
+        "message": message,
+    }
 
 
 def issue_session(response: Response, user: dict[str, Any]) -> None:
@@ -595,7 +731,12 @@ def _normalize_method(method: str) -> str:
     return choice
 
 
-def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict[str, Any]:
+def start_login(
+    email: str,
+    bootstrap_token: str = "",
+    method: str = "",
+    invite_token: str = "",
+) -> dict[str, Any]:
     addr = normalize_email(email)
     start_limit, _ = _rate_limits(addr)
     if not _rate_ok("start:" + addr, start_limit, RATE_WINDOW_SEC):
@@ -608,16 +749,34 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
     choice = _normalize_method(method)
     enrolled = totp_enrolled(addr)
     email_on = email_otp_enabled()
+    invite = str(invite_token or "").strip()
+
+    if invite:
+        secret = _pending_secret_for_invite(addr, invite)
+        append_audit(account, "auth.enroll.start", "session", addr, "invite totp secret issued")
+        return _enroll_payload(
+            addr,
+            secret,
+            enrolled,
+            email_on,
+            "Scan the QR in Google Authenticator, Authy, or 1Password (or type the secret), then confirm with a 6-digit code.",
+        )
+
+    if choice == "enroll":
+        raise HTTPException(
+            status_code=403,
+            detail="Re-enroll requires your current authenticator code or a Super Admin reset.",
+        )
 
     want_email = choice == "email" or (not choice and email_on and not enrolled)
-    if choice in {"totp", "enroll"}:
+    if choice == "totp":
         want_email = False
 
     if want_email:
         if not email_on:
             raise HTTPException(
                 status_code=400,
-                detail="Email OTP is not configured. Use authenticator — scan the QR or type the secret.",
+                detail="Email OTP is not configured. Use authenticator if you already enrolled, or ask a Super Admin for an invite.",
             )
         code = f"{secrets.randbelow(1_000_000):06d}"
         _store_challenge(
@@ -671,8 +830,7 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
             )
         return payload
 
-    replace = choice == "enroll" and enrolled
-    if enrolled and not replace:
+    if enrolled:
         append_audit(account, "auth.start", "session", addr, "totp challenge")
         return {
             "ok": True,
@@ -683,19 +841,50 @@ def start_login(email: str, bootstrap_token: str = "", method: str = "") -> dict
             "message": "Enter the 6-digit code from your authenticator app.",
         }
 
-    secret = _pending_or_new_secret(addr, bootstrap_token, replace=replace)
-    otpauth = _otpauth(secret, addr)
-    append_audit(account, "auth.enroll.start", "session", addr, "totp secret issued")
-    return {
-        "ok": True,
-        "email": addr,
-        "factor": "enroll",
-        "emailOtp": email_on,
-        "totpEnrolled": enrolled,
-        "secret": secret,
-        "otpauth": otpauth,
-        "message": "Scan the QR in Google Authenticator, Authy, or 1Password (or type the secret), then confirm with a 6-digit code.",
-    }
+    raise HTTPException(
+        status_code=403,
+        detail="Ask a Super Admin to send an authenticator invite before first sign-in.",
+    )
+
+
+def start_rotate(email: str, current_code: str) -> dict[str, Any]:
+    addr = normalize_email(email)
+    start_limit, _ = _rate_limits(addr)
+    if not _rate_ok("rotate:" + addr, start_limit, RATE_WINDOW_SEC):
+        raise HTTPException(status_code=429, detail="Too many sign-in attempts. Try again later.")
+    account = _resolve_login_account(email=addr)
+    if account is None or account.get("active") is False:
+        raise HTTPException(status_code=401, detail="That account cannot sign in.")
+    if not totp_enrolled(addr):
+        raise HTTPException(
+            status_code=403,
+            detail="Ask a Super Admin to send an authenticator invite before first sign-in.",
+        )
+    token = str(current_code or "").strip().replace(" ", "")
+    rec = _user_auth(addr)
+    if not token.isdigit() or len(token) != 6 or not _totp_ok(rec.get("totpSecret"), token):
+        raise HTTPException(status_code=401, detail="That authenticator code is not valid.")
+    pending = str(rec.get("totpPendingSecret") or "").strip()
+    if pending and rec.get("totpPendingKind") == "rotate":
+        secret = pending
+    else:
+        secret = pyotp.random_base32()
+        _put_user_auth(
+            addr,
+            {
+                "totpPendingSecret": secret,
+                "totpPendingAt": _utc(),
+                "totpPendingKind": "rotate",
+            },
+        )
+    append_audit(account, "auth.enroll.start", "session", addr, "rotate totp secret issued")
+    return _enroll_payload(
+        addr,
+        secret,
+        True,
+        email_otp_enabled(),
+        "Scan the new QR, then confirm with a 6-digit code from the new authenticator entry. Your current code still works until then.",
+    )
 
 
 def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, Any]:
@@ -713,11 +902,10 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
     rec = _user_auth(addr)
     challenge = _read_challenge(addr)
     confirmed_secret = rec.get("totpSecret") if rec.get("totpConfirmed") else None
+    pending_kind = str(rec.get("totpPendingKind") or "")
     pending_secret = str(rec.get("totpPendingSecret") or "").strip()
-    if not pending_secret and challenge and challenge.get("kind") == "enroll":
-        pending_secret = str(challenge.get("secret") or "").strip()
-    if not pending_secret and rec.get("totpSecret") and not rec.get("totpConfirmed"):
-        pending_secret = str(rec.get("totpSecret") or "").strip()
+    if pending_kind not in PENDING_KINDS:
+        pending_secret = ""
 
     ok = False
     used = ""
@@ -725,13 +913,10 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
     if confirmed_secret and _totp_ok(confirmed_secret, token):
         ok = True
         used = "totp"
+        if rec.get("totpPendingSecret") or rec.get("totpPendingKind"):
+            _clear_pending(addr)
 
     if not ok and pending_secret and _totp_ok(pending_secret, token):
-        if BOOTSTRAP_TOKEN and bootstrap_token != BOOTSTRAP_TOKEN and not totp_enrolled(addr):
-            raise HTTPException(
-                status_code=401,
-                detail="First-time authenticator enroll requires BOOTSTRAP_TOKEN.",
-            )
         _put_user_auth(
             addr,
             {
@@ -739,6 +924,8 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
                 "totpConfirmed": True,
                 "totpPendingSecret": None,
                 "totpPendingAt": None,
+                "totpPendingKind": None,
+                "enrollInvite": None,
                 "enrolledAt": rec.get("enrolledAt") or _utc(),
             },
         )
@@ -754,7 +941,7 @@ def verify_login(email: str, code: str, bootstrap_token: str = "") -> dict[str, 
     if not ok:
         raise HTTPException(
             status_code=401,
-            detail="That authenticator code is not valid. If it keeps failing, set up a new QR and delete old CircuitLoop entries in the app.",
+            detail="That authenticator code is not valid. Ask a Super Admin to reset the authenticator if you no longer have the current code.",
         )
 
     _store_challenge(addr, None)

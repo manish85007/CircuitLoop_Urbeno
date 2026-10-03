@@ -254,7 +254,7 @@ input[type=checkbox]{width:auto}
     <div class="muted" style="font-size:13px;margin-bottom:18px">IT Asset Disposition &amp; testing console</div>
     <div class="muted" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sign in</div>
     <div id="loginusers"></div>
-    <div class="muted" style="font-size:11px;margin-top:14px">Sign in with an account a Super Admin has added. First sign-in: scan the authenticator QR (or type the secret). Email OTP is offered only when SMTP is configured — otherwise authenticator is the working factor.</div>
+    <div class="muted" style="font-size:11px;margin-top:14px">Sign in with an account a Super Admin has added. First authenticator setup uses an invite the Super Admin sends — not a QR from this card. Email OTP is offered only when SMTP is configured.</div>
   </div>
 </div>
 
@@ -311,6 +311,7 @@ input[type=checkbox]{width:auto}
     <div class="userchip">
       <span id="whoami"></span>
       <div class="avatar" id="whoavatar">U</div>
+      <button class="btn btn-sm" data-act="replaceAuthenticator">Replace authenticator</button>
       <button class="btn btn-sm" data-act="logout" onclick="logout()">Sign out</button>
     </div>
   </div>
@@ -325,8 +326,8 @@ input[type=checkbox]{width:auto}
 <div class="modal-bg" id="modalbg"><div class="modal" id="modalbox"></div></div>
 <div id="toast"></div>
 <script src="/static/asset-csv.js?v=prod1"></script>
-<script src="/static/field.js?v=prod15"></script>
+<script src="/static/field.js?v=prod16"></script>
 <script src="/static/qrcode.min.js?v=prod15"></script>
-<script src="/static/persist.js?v=prod15"></script>
+<script src="/static/persist.js?v=prod16"></script>
 </body>
 </html>

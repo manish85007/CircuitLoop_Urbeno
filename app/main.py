@@ -16,12 +16,15 @@ from app.audit import recent_audit
 from app.auth import (
     discard_invalid_session_cookie,
     end_session,
+    issue_enroll_invite,
     issue_session,
     read_session,
     require_admin,
     require_user,
     signed_out_blocked,
     start_login,
+    start_rotate,
+    totp_enrolled,
     verify_login,
 )
 from app.backup import backup_loop, public_backup_status
@@ -64,6 +67,7 @@ PUBLIC_API = {
     ("GET", "/api/health"),
     ("POST", "/api/auth/start"),
     ("POST", "/api/auth/verify"),
+    ("POST", "/api/auth/rotate"),
     ("POST", "/api/auth/otp"),
     ("POST", "/api/login"),
     ("POST", "/api/otp"),
@@ -173,12 +177,18 @@ class EmailIn(BaseModel):
     email: str = Field(min_length=3, max_length=120)
     bootstrapToken: str = ""
     method: str = ""
+    inviteToken: str = ""
 
 
 class VerifyIn(BaseModel):
     email: str = Field(min_length=3, max_length=120)
     code: str = Field(min_length=6, max_length=8)
     bootstrapToken: str = ""
+
+
+class RotateIn(BaseModel):
+    email: str = ""
+    code: str = Field(min_length=6, max_length=8)
 
 
 class BlanccoIn(BaseModel):
@@ -211,7 +221,14 @@ def health() -> JSONResponse:
 @app.post("/api/auth/start")
 @app.post("/api/login")
 def auth_start(body: EmailIn) -> JSONResponse:
-    return api_json(start_login(body.email, body.bootstrapToken, body.method))
+    return api_json(start_login(body.email, body.bootstrapToken, body.method, body.inviteToken))
+
+
+@app.post("/api/auth/rotate")
+def auth_rotate(request: Request, body: RotateIn) -> JSONResponse:
+    session = read_session(request)
+    email = body.email or ((session or {}).get("email") or "")
+    return api_json(start_rotate(email, body.code))
 
 
 @app.post("/api/auth/verify")
@@ -374,12 +391,23 @@ def update_config(request: Request, payload: dict[str, Any]) -> JSONResponse:
     return api_json(upsert_config(user, payload))
 
 
+def _user_email_for_id(user_id: str) -> str:
+    from app.store import resolve_account
+
+    account = resolve_account(user_id=user_id)
+    return str((account or {}).get("email") or "")
+
+
 @app.post("/api/users")
 def create_user(request: Request, payload: dict[str, Any]) -> JSONResponse:
     user = require_admin(request)
     created = upsert_user_profile(user, dict(payload or {}))
     state = load_state() or empty_production_state()
-    return api_json({"user": created, "state": filter_state_for_user(state, user)})
+    invite = None
+    email = str(created.get("email") or "")
+    if email and not totp_enrolled(email):
+        invite = issue_enroll_invite(user, email, purpose="first")
+    return api_json({"user": created, "state": filter_state_for_user(state, user), "invite": invite})
 
 
 @app.put("/api/users/{user_id}")
@@ -390,6 +418,24 @@ def update_user(user_id: str, request: Request, payload: dict[str, Any]) -> JSON
     saved = upsert_user_profile(user, payload)
     state = load_state() or empty_production_state()
     return api_json({"user": saved, "state": filter_state_for_user(state, user)})
+
+
+@app.post("/api/users/{user_id}/authenticator-invite")
+def send_authenticator_invite(user_id: str, request: Request) -> JSONResponse:
+    admin = require_admin(request)
+    email = _user_email_for_id(user_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return api_json(issue_enroll_invite(admin, email, purpose="first"))
+
+
+@app.post("/api/users/{user_id}/reset-authenticator")
+def reset_authenticator(user_id: str, request: Request) -> JSONResponse:
+    admin = require_admin(request)
+    email = _user_email_for_id(user_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return api_json(issue_enroll_invite(admin, email, purpose="reset"))
 
 
 @app.post("/api/manifests")

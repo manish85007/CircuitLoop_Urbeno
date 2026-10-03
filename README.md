@@ -13,23 +13,23 @@ Built-in accounts:
 | **manish@urbeno.in** | Super Admin |
 | **darshak@urbeno.in** | Field Engineer |
 
-A Super Admin can add more people from **Users → Add user**. New accounts sign in with that email and enroll an authenticator on first visit. Roles are assigned on the server. There is no click-a-name login and no password store.
+A Super Admin can add more people from **Users → Add user**. New accounts cannot self-enroll from the login page. The Super Admin sends an authenticator invite (Users → Send invite, or the token shown when adding the user). Roles are assigned on the server. There is no click-a-name login and no password store.
 
 ### First-time authenticator (TOTP) enroll
 
-SMTP is optional. If no email API is configured, authenticator is the working factor.
+SMTP is optional. If no email API is configured, authenticator is the working factor after enroll.
 
-1. Open https://loop.urbeno.in
-2. Enter your Urbeno email and **Continue with authenticator**.
-3. Add **CircuitLoop** in Google Authenticator, Authy, or 1Password:
-   - Scan the QR code, or copy the secret / `otpauth://` URL.
-   - Keep a single CircuitLoop entry. Each extra entry from an earlier try will not match.
-4. Enter the 6-digit code to confirm. That binds the authenticator to your account.
-5. After a successful code, Field must show the sidebar modules (Dashboard, Scan & Test, Projects, Asset Register, Users, …) and Sign out must return to the email card. Hard-refresh once after a deploy so `persist.js?v=prod10` loads.
+1. Super Admin signs in, then **Users → Add user** (or **Send invite** on an existing person who has never enrolled).
+2. Copy the invite link (token is shown once). The person opens that link on a trusted device.
+3. They add **CircuitLoop** in Google Authenticator, Authy, or 1Password (scan the QR, or type the secret).
+4. They enter the 6-digit code to bind the authenticator.
+5. Later visits: email + current 6-digit authenticator code. There is no public **Set up a new authenticator QR** on the login card.
 
-If a code does not match, use **Set up a new authenticator QR**, delete the old CircuitLoop entry in the app, and scan the new code. The previous secret stays valid until the new one is confirmed.
+To replace an authenticator you still have: Sign in → **Replace authenticator** and enter the current 6-digit code, then scan the new QR.
 
-If `BOOTSTRAP_TOKEN` is set on the server, the first enroll also requires that token (recommended).
+If the authenticator is lost: Super Admin → **Reset authenticator** on that user, then send the new invite. The previous code stops working immediately.
+
+`BOOTSTRAP_TOKEN` is no longer the enroll gate. First-time TOTP is invite-only.
 
 ### Email OTP
 
@@ -82,7 +82,7 @@ Push to `main`. Service `web` builds the Dockerfile. Volume at `/data`.
 | `DATA_DIR` | `/data` |
 | `SESSION_SECRET` | Cookie signing — set a long random string |
 | `COOKIE_SECURE` | Auto-on for `/data`; keep on in production |
-| `BOOTSTRAP_TOKEN` | Optional extra check for first TOTP enroll |
+| `BOOTSTRAP_TOKEN` | Unused for enroll (invite-only). Safe to leave empty. |
 | `BLANCCO_API_KEY` | Live Blancco only. **Not stored in the register.** |
 | `BLANCCO_ENDPOINT` | Blancco API URL |
 | `CORS_ORIGINS` | Default `https://loop.urbeno.in` |
@@ -105,7 +105,7 @@ Health (`GET /api/health`) reports backup policy without filesystem paths.
 
 ## API
 
-Session cookie required on every `/api/*` except `/api/health`, `/api/auth/start`, `/api/auth/verify` (and `/api/otp`). `/docs`, `/redoc`, `/openapi.json` are off.
+Session cookie required on every `/api/*` except `/api/health`, `/api/auth/start`, `/api/auth/verify`, `/api/auth/rotate` (and `/api/otp`). `/docs`, `/redoc`, `/openapi.json` are off. Unauthenticated start never returns a TOTP secret. First enroll is `inviteToken` from a Super Admin. Rotate requires the current 6-digit code.
 
 Per-record writes: `POST/PUT /api/assets`, `/api/clients`, `/api/projects`, `/api/company`, `/api/config`, `/api/sync`. Whole-DB `PUT /api/state` is disabled.
 

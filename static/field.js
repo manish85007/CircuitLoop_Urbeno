@@ -2067,6 +2067,8 @@ render(){
    <td>${caps}</td>
    <td>${u.active?badge('Verified').replace('Verified','Active'):badge('Rejected').replace('Rejected','Disabled')}</td>
    <td class="flex"><button class="btn btn-sm" data-act="editUser" data-id="${esc(u.id)}">Edit</button>
+    <button class="btn btn-sm" data-act="inviteUser" data-id="${esc(u.id)}">Send invite</button>
+    <button class="btn btn-sm" data-act="resetAuthenticator" data-id="${esc(u.id)}">Reset authenticator</button>
     ${u.id===me.id||u.id==='U-1'?'':`<button class="btn btn-sm btn-danger" data-act="toggleUser" data-id="${esc(u.id)}">${u.active?'Disable':'Enable'}</button>`}</td></tr>`;
  }).join('');
  return `
@@ -2075,7 +2077,7 @@ render(){
   <div class="kpi blue"><div class="lbl">Field Engineers</div><div class="val">${(DB.users||[]).filter(u=>u.role==='Field Engineer').length}</div></div>
   <div class="kpi teal"><div class="lbl">Active</div><div class="val">${(DB.users||[]).filter(u=>u.active).length}</div></div>
  </div>
- <div class="info"><b>Roles:</b> Field Engineers see only the dashboard for their own projects, the scan &amp; test screen, and their assigned project list — they can add assets and record test parameters, nothing else. Super Admins have every module, including verification, masters, Blancco configuration and reports. New people sign in with email and a first-time authenticator QR — CircuitLoop does not store a password.</div>
+ <div class="info"><b>Roles:</b> Field Engineers see only the dashboard for their own projects, the scan &amp; test screen, and their assigned project list — they can add assets and record test parameters, nothing else. Super Admins have every module, including verification, masters, Blancco configuration and reports. New people cannot self-enroll from the login page — send an authenticator invite. CircuitLoop does not store a password.</div>
  <div class="card"><div class="card-h"><h3>All users</h3>
   <button class="btn btn-p btn-sm" data-act="addUser">+ Add user</button></div>
   <div class="tblwrap"><table><thead><tr><th>User</th><th>Role</th><th>Phone</th><th>Projects</th><th>Assets captured</th><th>State</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7" class="muted">No users yet.</td></tr>'}</tbody></table></div></div>`;
@@ -2092,7 +2094,7 @@ function editUser(id){
    <div><label class="f">Phone</label><input id="us_phone" value="${u?esc(u.phone||''):''}"></div></div>
   <div class="${u?'muted':'info'}" style="font-size:12px;margin-top:10px">${u
     ?(locked?'Built-in account — email and role stay on the server. Name and phone can be updated.':'They sign in with this email and an authenticator app. Changing email does not move an existing authenticator enrollment.')
-    :'They sign in with this email. On first visit they scan a CircuitLoop authenticator QR (or type the secret) and confirm a 6-digit code. No password is stored.'}</div>
+    :'They sign in with this email after you send an authenticator invite. They scan the QR from that invite and confirm a 6-digit code. No password is stored.'}</div>
  </div>
  <div class="modal-f"><button class="btn" data-act="closeModal">Cancel</button>
   <button class="btn btn-p" data-act="saveUser" data-id="${u?esc(u.id):''}">${u?'Save':'Add user'}</button></div>`);
@@ -2114,11 +2116,13 @@ function saveUser(id){
  const req=id?api('PUT','/api/users/'+id,Object.assign({id:id},payload)):api('POST','/api/users',payload);
  Promise.resolve(req).then(function(res){
   if(res&&res.state&&typeof applyRemoteUserState==='function')applyRemoteUserState(res.state);
-  else if(window.CircuitLoopPersist&&CircuitLoopPersist.hydrate)return CircuitLoopPersist.hydrate();
- }).then(function(){
+  else if(window.CircuitLoopPersist&&CircuitLoopPersist.hydrate)return CircuitLoopPersist.hydrate().then(function(){return res;});
+  return res;
+ }).then(function(res){
   closeModal();
   rerender();
-  toast(id?'User saved: '+name:'Added '+name+' — they enroll authenticator on first sign-in');
+  toast(id?'User saved: '+name:'Added '+name+' — copy the authenticator invite for them');
+  if(!id&&res&&res.invite)showInviteOnce('Authenticator invite for '+name,res.invite);
  }).catch(function(err){
   toast((err&&err.message)||'Could not save user');
  });
@@ -2145,6 +2149,93 @@ function toggleUser(id){
 function applyRemoteUserState(state){
  if(window.CircuitLoopPersist&&CircuitLoopPersist.applyState)CircuitLoopPersist.applyState(state);
  else if(state&&typeof DB!=='undefined'&&Array.isArray(state.users))DB.users=state.users;
+}
+function persistApi(){
+ return window.CircuitLoopPersist&&CircuitLoopPersist.api;
+}
+function copyField(text,btn){
+ const label=btn&&btn.textContent;
+ const done=function(){if(btn){btn.textContent='Copied';setTimeout(function(){btn.textContent=label;},1400);}};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text||'').then(done).catch(function(){});
+}
+function showInviteOnce(title,invite){
+ const token=(invite&&invite.inviteToken)||'';
+ const url=(invite&&invite.inviteUrl)||'';
+ const mailed=invite&&invite.emailed?'Invite email was accepted by the mail server. ':'Copy the link now — the token is shown once.';
+ openModal(`<div class="modal-h"><h3>${esc(title||'Authenticator invite')}</h3><button class="x" data-act="closeModal">×</button></div>
+ <div class="modal-b">
+  <div class="info">${esc(mailed)} It expires in 48 hours. Do not put this in a ticket or chat log if you can avoid it.</div>
+  <label class="f">Invite link</label>
+  <div class="flex" style="gap:6px"><input id="inv_url" readonly value="${esc(url)}"><button type="button" class="btn btn-sm" id="inv_copy_url">Copy link</button></div>
+  <label class="f">Invite token</label>
+  <div class="flex" style="gap:6px"><input id="inv_token" readonly value="${esc(token)}"><button type="button" class="btn btn-sm" id="inv_copy_token">Copy token</button></div>
+ </div>
+ <div class="modal-f"><button class="btn btn-p" data-act="closeModal">Done</button></div>`);
+ const urlBtn=document.getElementById('inv_copy_url');
+ const tokenBtn=document.getElementById('inv_copy_token');
+ if(urlBtn)urlBtn.onclick=function(){copyField(url,urlBtn);};
+ if(tokenBtn)tokenBtn.onclick=function(){copyField(token,tokenBtn);};
+}
+function inviteUser(id){
+ const u=(DB.users||[]).find(x=>x.id===id);
+ const api=persistApi();
+ if(!u||!api){toast('Could not reach CircuitLoop');return;}
+ api('POST','/api/users/'+id+'/authenticator-invite',{}).then(function(res){
+  showInviteOnce('Authenticator invite for '+(u.name||u.email),res);
+ }).catch(function(err){toast((err&&err.message)||'Could not send invite');});
+}
+function resetAuthenticator(id){
+ const u=(DB.users||[]).find(x=>x.id===id);
+ const api=persistApi();
+ if(!u||!api){toast('Could not reach CircuitLoop');return;}
+ if(!window.confirm('Reset authenticator for '+(u.name||u.email)+'? Their current code will stop working. You must copy the new invite.'))return;
+ api('POST','/api/users/'+id+'/reset-authenticator',{}).then(function(res){
+  showInviteOnce('Authenticator reset for '+(u.name||u.email),res);
+ }).catch(function(err){toast((err&&err.message)||'Could not reset authenticator');});
+}
+function replaceAuthenticator(){
+ const me=currentUser()||{};
+ openModal(`<div class="modal-h"><h3>Replace authenticator</h3><button class="x" data-act="closeModal">×</button></div>
+ <div class="modal-b">
+  <div class="info">Enter a code from your <b>current</b> authenticator. Then scan the new QR and confirm. Super Admin reset is the path if you no longer have the current code.</div>
+  <label class="f">Current authenticator code</label>
+  <input id="rot_current" inputmode="numeric" maxlength="8" placeholder="6-digit code">
+  <div id="rot_qr"></div>
+ </div>
+ <div class="modal-f"><button class="btn" data-act="closeModal">Cancel</button>
+  <button class="btn btn-p" data-act="startReplaceAuthenticator">Continue</button></div>`);
+}
+function startReplaceAuthenticator(){
+ const api=persistApi();
+ const me=currentUser()||{};
+ const code=(($('#rot_current')&&$('#rot_current').value)||'').replace(/\s+/g,'');
+ if(!api||!me.email){toast('Sign in first');return;}
+ if(!/^\d{6}$/.test(code)){toast('Enter the current 6-digit code');return;}
+ api('POST','/api/auth/rotate',{email:me.email,code:code}).then(function(pending){
+  const host=document.createElement('div');
+  host.innerHTML=`<div class="info" style="margin-top:12px">Scan this new QR. Keep one CircuitLoop entry after you confirm.</div>
+   <div id="rot_qr_box" style="display:flex;justify-content:center;margin:12px 0;padding:12px;background:#fff;border:1px solid var(--line);border-radius:10px"></div>
+   <label class="f">New authenticator code</label>
+   <input id="rot_new" inputmode="numeric" maxlength="8" placeholder="6-digit code from the new entry">`;
+  const box=document.getElementById('rot_qr');
+  if(box){box.innerHTML='';box.appendChild(host);}
+  if(window.CircuitLoopPersist&&CircuitLoopPersist.drawEnrollQr){
+   CircuitLoopPersist.drawEnrollQr(pending.otpauth||'',document.getElementById('rot_qr_box'));
+  }
+  const foot=document.querySelector('#modalbox .modal-f');
+  if(foot)foot.innerHTML='<button class="btn" data-act="closeModal">Cancel</button><button class="btn btn-p" data-act="confirmReplaceAuthenticator">Confirm new authenticator</button>';
+ }).catch(function(err){toast((err&&err.message)||'Could not start replace');});
+}
+function confirmReplaceAuthenticator(){
+ const api=persistApi();
+ const me=currentUser()||{};
+ const code=(($('#rot_new')&&$('#rot_new').value)||'').replace(/\s+/g,'');
+ if(!api||!me.email){toast('Sign in first');return;}
+ if(!/^\d{6}$/.test(code)){toast('Enter the new 6-digit code');return;}
+ api('POST','/api/auth/verify',{email:me.email,code:code}).then(function(){
+  closeModal();
+  toast('Authenticator replaced');
+ }).catch(function(err){toast((err&&err.message)||'Could not confirm new authenticator');});
 }
 
 /* ============================================================
@@ -2259,6 +2350,11 @@ document.addEventListener('click',e=>{
  if(act==='addUser'){e.preventDefault();editUser(null);return;}
  if(act==='editUser'){e.preventDefault();editUser(btn.getAttribute('data-id'));return;}
  if(act==='saveUser'){e.preventDefault();saveUser(btn.getAttribute('data-id')||'');return;}
+ if(act==='inviteUser'){e.preventDefault();inviteUser(btn.getAttribute('data-id'));return;}
+ if(act==='resetAuthenticator'){e.preventDefault();resetAuthenticator(btn.getAttribute('data-id'));return;}
+ if(act==='replaceAuthenticator'){e.preventDefault();replaceAuthenticator();return;}
+ if(act==='startReplaceAuthenticator'){e.preventDefault();startReplaceAuthenticator();return;}
+ if(act==='confirmReplaceAuthenticator'){e.preventDefault();confirmReplaceAuthenticator();return;}
  if(act==='toggleUser'){e.preventDefault();toggleUser(btn.getAttribute('data-id'));return;}
  if(act==='closeModal'){e.preventDefault();closeModal();return;}
 });

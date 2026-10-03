@@ -313,6 +313,23 @@
     }
   }
 
+  function inviteFromLocation() {
+    let search = "";
+    let hash = "";
+    try {
+      search = String(window.location.search || "").replace(/^\?/, "");
+    } catch (err) {}
+    try {
+      hash = String(window.location.hash || "").replace(/^#/, "");
+    } catch (err) {}
+    const query = new URLSearchParams(search);
+    const frag = new URLSearchParams(hash.replace(/^[&#]/, ""));
+    return {
+      email: String(query.get("email") || frag.get("email") || "").trim().toLowerCase(),
+      invite: String(query.get("invite") || frag.get("invite") || "").trim(),
+    };
+  }
+
   function drawEnrollQr(uri, host) {
     if (!host) return;
     host.innerHTML = "";
@@ -355,8 +372,10 @@
       '<form id="authform" novalidate>' +
         '<label class="f">Work email</label>' +
         '<input id="auth_email" type="email" autocomplete="username" required placeholder="you@urbeno.in">' +
-        '<div id="auth_hint" class="warn" style="margin-top:12px">Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.</div>' +
+        '<div id="auth_hint" class="warn" style="margin-top:12px">If you already enrolled, continue with your authenticator. First sign-in needs an invite a Super Admin sent you — not a QR from this card.</div>' +
         '<div id="auth_extra"></div>' +
+        '<label class="f" style="margin-top:12px">Authenticator invite (first sign-in)</label>' +
+        '<input id="auth_invite" type="text" autocomplete="off" placeholder="Paste the invite token">' +
         '<button class="btn btn-p" type="submit" style="width:100%;justify-content:center;margin-top:14px" id="auth_go">Continue with authenticator</button>' +
         '<button class="btn" type="button" style="width:100%;justify-content:center;margin-top:8px" id="auth_email_btn" disabled>Email me a code</button>' +
         '<div class="muted" id="auth_msg" style="font-size:12px;margin-top:12px"></div>' +
@@ -370,6 +389,10 @@
     const go = form.querySelector("#auth_go");
     const emailBtn = form.querySelector("#auth_email_btn");
     const hint = form.querySelector("#auth_hint");
+    const inviteInput = form.querySelector("#auth_invite");
+    const fromLink = inviteFromLocation();
+    if (fromLink.email && !email.value) email.value = fromLink.email;
+    if (fromLink.invite && inviteInput) inviteInput.value = fromLink.invite;
     let phase = "pick";
     let emailOtpLive = false;
     let emailHint = "";
@@ -388,7 +411,7 @@
         hint.style.marginTop = "12px";
         hint.textContent =
           emailHint ||
-          "Authenticator (QR / 6-digit code) is the working factor. Email OTP is not configured on this server — we will not send a fake code.";
+          "Authenticator is the working factor if you already enrolled. First-time setup uses a Super Admin invite, not a QR from this card.";
         emailBtn.disabled = true;
       }
     }
@@ -469,18 +492,10 @@
         (kind === "email" ? "Email code" : "Authenticator code") +
         "</label>" +
         '<input id="auth_code" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">' +
-        (kind === "totp"
-          ? '<button type="button" class="btn" id="auth_reset" style="width:100%;justify-content:center;margin-top:10px">Set up a new authenticator QR</button>'
-          : kind === "email"
+        (kind === "email"
             ? '<button type="button" class="btn" id="auth_resend" style="width:100%;justify-content:center;margin-top:10px">Email a new code</button>'
             : "");
       if (preview) extra.querySelector("#auth_code").value = preview;
-      const reset = extra.querySelector("#auth_reset");
-      if (reset) {
-        reset.addEventListener("click", function () {
-          startWith("enroll");
-        });
-      }
       const resend = extra.querySelector("#auth_resend");
       if (resend) {
         resend.addEventListener("click", function () {
@@ -501,7 +516,11 @@
       }
       setBusy(true, method === "email" ? "Sending email code…" : "Continuing…");
       try {
-        const pending = await api("POST", "/api/auth/start", { email: addr, method: method });
+        const pending = await api("POST", "/api/auth/start", {
+          email: addr,
+          method: method,
+          inviteToken: (inviteInput && inviteInput.value) || fromLink.invite || "",
+        });
         phase = pending.factor || "totp";
         extra.innerHTML = "";
         if (phase === "enroll") renderEnroll(pending);
@@ -556,6 +575,10 @@
       }
       await startWith("email");
     });
+
+    if (fromLink.invite && email.value) {
+      startWith("totp");
+    }
   }
 
   function sessionUserFrom(payload) {
@@ -779,6 +802,7 @@
     showAuth: showAuth,
     hydrate: hydrateFromServer,
     applyState: applyState,
+    drawEnrollQr: drawEnrollQr,
   };
 
   async function bootFromServer() {
