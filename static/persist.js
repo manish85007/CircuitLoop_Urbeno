@@ -849,6 +849,7 @@
     showAuth: showAuth,
     hydrate: hydrateFromServer,
     applyState: applyState,
+    refresh: refreshView,
     drawEnrollQr: drawEnrollQr,
   };
 

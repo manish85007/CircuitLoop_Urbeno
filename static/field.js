@@ -1407,7 +1407,7 @@ render(){
      <button class="btn btn-sm" onclick="editAssetDetails('${a.id}','assetDetail')">Edit</button>
      ${a.status==='Tested'?`<button class="btn btn-sm btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>
        <button class="btn btn-sm btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>`:''}
-     ${admin?`<button class="btn btn-sm btn-danger" onclick="askDeleteAssets(['${esc(a.id)}'],'Delete ${esc(a.serial)} from the register? Use this for a mistaken CSV import. This cannot be undone.')">Delete</button>`:''}
+     ${admin?`<button class="btn btn-sm btn-danger" data-act="askDeleteOne" data-id="${esc(a.id)}" data-serial="${esc(a.serial)}">Delete</button>`:''}
    </td></tr>`).join('');
  const pend=DB.assets.filter(a=>a.status==='Tested');
  return `
@@ -1479,7 +1479,7 @@ function assetDetail(id){
   <button class="btn" onclick="editAssetDetails('${a.id}','assetDetail')">Edit details</button>
   ${a.status==='Tested'?`<button class="btn btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>
     <button class="btn btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>`:''}
-  ${canEdit()?`<button class="btn btn-danger" onclick="askDeleteAssets(['${esc(a.id)}'],'Delete ${esc(a.serial)} from the register? Use this for a mistaken CSV import. This cannot be undone.')">Delete</button>`:''}
+  ${canEdit()?`<button class="btn btn-danger" data-act="askDeleteOne" data-id="${esc(a.id)}" data-serial="${esc(a.serial)}">Delete</button>`:''}
   <button class="btn" onclick="closeModal()">Close</button></div>`,true);
 }
 function verifyAsset(id){
@@ -1534,28 +1534,36 @@ function askDeleteAssets(ids,message){
  if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
  const list=(ids||[]).map(id=>String(id||'').trim()).filter(Boolean);
  if(!list.length){toast('Nothing to delete');return;}
- openModal(`<div class="modal-h"><h3>Delete from register</h3><button class="x" onclick="closeModal()">×</button></div>
+ const payload=JSON.stringify(list);
+ openModal(`<div class="modal-h"><h3>Delete from register</h3><button class="x" data-act="closeModal">×</button></div>
  <div class="modal-b">
   <div class="warn">${esc(message||('Delete '+list.length+' asset(s) from the register? Use this for a mistaken CSV import. This cannot be undone.'))}</div>
   <div class="muted" style="font-size:12px;margin-top:8px">${list.length} row(s) will be removed from the live register. Other assets stay. /data is not wiped.</div>
  </div>
- <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
-  <button class="btn btn-danger" onclick="confirmDeleteAssets(${JSON.stringify(list).replace(/</g,'\\u003c')})">Delete</button></div>`);
+ <div class="modal-f"><button class="btn" data-act="closeModal">Cancel</button>
+  <button class="btn btn-danger" data-act="confirmDeleteAssets" data-ids="${esc(payload)}">Delete</button></div>`);
 }
 function confirmDeleteAssets(ids){
  if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
  const list=(ids||[]).map(id=>String(id||'').trim()).filter(Boolean);
- const api=window.CircuitLoopPersist&&CircuitLoopPersist.api;
+ if(!list.length){toast('Nothing to delete');return;}
+ const persist=window.CircuitLoopPersist;
+ const api=persist&&persist.api;
  if(!api){toast('Could not reach CircuitLoop');return;}
- api('POST','/api/assets/delete',{ids:list}).then(function(res){
-  const gone=new Set((res&&res.ids)||list);
-  DB.assets=(DB.assets||[]).filter(a=>!gone.has(a.id));
-  LAST_IMPORT_IDS=(LAST_IMPORT_IDS||[]).filter(id=>!gone.has(id));
-  if(res&&res.state&&window.CircuitLoopPersist&&CircuitLoopPersist.applyState)CircuitLoopPersist.applyState(res.state);
-  closeModal();
-  rerender();
-  toast('Deleted '+(res&&res.deleted!=null?res.deleted:gone.size)+' asset(s).');
- }).catch(function(err){toast((err&&err.message)||'Could not delete');});
+ const run=function(){
+  api('POST','/api/assets/delete',{ids:list}).then(function(res){
+   const gone=new Set((res&&res.ids)||list);
+   LAST_IMPORT_IDS=(LAST_IMPORT_IDS||[]).filter(id=>!gone.has(id));
+   if(res&&res.state&&persist.applyState)persist.applyState(res.state);
+   else DB.assets=(DB.assets||[]).filter(a=>!gone.has(a.id));
+   closeModal();
+   if(persist.refresh)persist.refresh();
+   else rerender();
+   toast('Deleted '+(res&&res.deleted!=null?res.deleted:gone.size)+' asset(s).');
+  }).catch(function(err){toast((err&&err.message)||'Could not delete');});
+ };
+ if(persist.flush)Promise.resolve(persist.flush()).then(run,run);
+ else run();
 }
 function bulkDeleteShown(){
  if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
@@ -2456,6 +2464,20 @@ document.addEventListener('click',e=>{
  if(act==='confirmReplaceAuthenticator'){e.preventDefault();confirmReplaceAuthenticator();return;}
  if(act==='toggleUser'){e.preventDefault();toggleUser(btn.getAttribute('data-id'));return;}
  if(act==='closeModal'){e.preventDefault();closeModal();return;}
+ if(act==='askDeleteOne'){
+  e.preventDefault();
+  const id=btn.getAttribute('data-id');
+  const serial=btn.getAttribute('data-serial')||id;
+  askDeleteAssets([id],'Delete '+serial+' from the register? Use this for a mistaken CSV import. This cannot be undone.');
+  return;
+ }
+ if(act==='confirmDeleteAssets'){
+  e.preventDefault();
+  let ids=[];
+  try{ids=JSON.parse(btn.getAttribute('data-ids')||'[]');}catch(err){}
+  confirmDeleteAssets(ids);
+  return;
+ }
 });
 window.enterField=enterField;
 window.leaveField=leaveField;

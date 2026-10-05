@@ -218,9 +218,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod18" in html
+    assert "persist.js?v=prod19" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod20" in html
+    assert "field.js?v=prod21" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -243,6 +243,9 @@ def test_index_production_login(client):
     assert "Undo last import" in field.text
     assert "LAST_IMPORT_IDS" in field.text
     assert "/api/assets/delete" in field.text
+    assert 'data-act="confirmDeleteAssets"' in field.text
+    assert 'data-act="askDeleteOne"' in field.text
+    assert 'onclick="confirmDeleteAssets(${JSON.stringify' not in field.text
     assert "Lead Engineer" in field.text
     assert "Access level" in field.text
     assert "function ensureDbLists(" in field.text
@@ -274,6 +277,7 @@ def test_index_production_login(client):
     assert "dbSeed" in persist.text
     assert "ensureLists" in persist.text
     assert "Object.assign(DB, dbSeed, state)" in persist.text
+    assert "refresh: refreshView" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
     assert "Set up a new authenticator QR" not in persist.text

@@ -21,8 +21,8 @@ assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod20"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod18"), "prod18 cache bust");
+assert(html.includes("field.js?v=prod21"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod19"), "prod19 cache bust");
 assert(html.includes("asset-csv.js?v=prod2"), "asset-csv cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("window.enterField"), "persist calls enterField");
@@ -50,6 +50,9 @@ assert(field.includes("Delete shown"), "Delete shown control");
 assert(field.includes("/api/assets/delete"), "delete API");
 assert(field.includes("LAST_IMPORT_IDS"), "last import ids");
 assert(field.includes("Super Admin can Delete or Undo last import"), "import toast undo");
+assert(field.includes('data-act="confirmDeleteAssets"'), "confirm delete uses data-act");
+assert(field.includes('data-act="askDeleteOne"'), "row delete uses data-act");
+assert(!field.includes('onclick="confirmDeleteAssets(${JSON.stringify'), "confirm onclick not broken by JSON quotes");
 assert(persist.includes("previewCode"), "preview email OTP shown on-screen");
 
 function fakeDom() {
@@ -117,6 +120,8 @@ function fakeDom() {
   ids.bottombar = bottombar;
   ids.toast = toastBox;
   ids.scrim = el("div", "scrim");
+  ids.modalbg = el("div", "modalbg");
+  ids.modalbox = el("div", "modalbox");
   return {
     getElementById(id) {
       return ids[id] || null;
@@ -238,6 +243,27 @@ vm.runInContext("show('register')", ctx);
 assert(documentRef._ids.content.innerHTML.includes("Delete shown"), "Super Admin has Delete shown, got: " + documentRef._ids.content.innerHTML.slice(0, 400));
 assert(documentRef._ids.content.innerHTML.includes("Undo last import"), "Super Admin has Undo last import");
 assert(documentRef._ids.content.innerHTML.includes("mistaken bulk-upload"), "Super Admin register explains delete");
+
+vm.runInContext(
+  'DB.assets=[{id:"AST-1",serial:"SN-1",usn:"USN-1",category:"Laptop",brand:"Dell",model:"X",projectId:"PRJ-1",status:"Registered",assetTag:"",testedBy:"",testedAt:"",grade:"",blancco:null,tests:{},history:[]}]; show("register")',
+  ctx
+);
+assert(documentRef._ids.content.innerHTML.includes('data-act="askDeleteOne"'), "register row delete uses data-act");
+assert(!documentRef._ids.content.innerHTML.includes('onclick="askDeleteAssets(['), "register row delete is not a broken onclick");
+vm.runInContext("askDeleteAssets(['AST-1'],'Delete SN-1 from the register?')", ctx);
+const modalHtml = documentRef._ids.modalbox.innerHTML;
+assert(modalHtml.includes('data-act="confirmDeleteAssets"'), "confirm Delete uses data-act, got: " + modalHtml.slice(0, 500));
+assert(!/onclick="confirmDeleteAssets\(\[/.test(modalHtml), "confirm Delete onclick is not broken by JSON quotes: " + modalHtml);
+assert(modalHtml.includes("data-ids="), "confirm Delete carries ids");
+const idsAttr = (modalHtml.match(/data-ids="([^"]*)"/) || [])[1] || "";
+const decoded = idsAttr.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+let parsedIds;
+try {
+  parsedIds = JSON.parse(decoded);
+} catch (err) {
+  parsedIds = null;
+}
+assert(parsedIds && parsedIds[0] === "AST-1", "confirm data-ids parses, got: " + decoded);
 
 vm.runInContext("leaveField()", ctx);
 
