@@ -218,9 +218,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod19" in html
+    assert "persist.js?v=prod20" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod21" in html
+    assert "field.js?v=prod22" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -246,6 +246,11 @@ def test_index_production_login(client):
     assert 'data-act="confirmDeleteAssets"' in field.text
     assert 'data-act="askDeleteOne"' in field.text
     assert 'onclick="confirmDeleteAssets(${JSON.stringify' not in field.text
+    assert "function newProject(" in field.text
+    assert "function nextProjectId(" in field.text
+    assert "function saveProject(" in field.text
+    assert 'data-act="newProject"' in field.text
+    assert "PRJ-'+(DB.seq.project++)" not in field.text
     assert "Lead Engineer" in field.text
     assert "Access level" in field.text
     assert "function ensureDbLists(" in field.text
@@ -278,6 +283,7 @@ def test_index_production_login(client):
     assert "ensureLists" in persist.text
     assert "Object.assign(DB, dbSeed, state)" in persist.text
     assert "refresh: refreshView" in persist.text
+    assert "function mergeSeq(" in persist.text
     assert 'method: "PUT"' not in persist.text
     assert "never writes the demo seed" in persist.text.lower() or "Never writes the demo seed" in persist.text
     assert "Set up a new authenticator QR" not in persist.text
@@ -839,3 +845,49 @@ def test_unknown_email_still_rejected_after_roster_grows(client):
     client.delete("/api/session")
     res = client.post("/api/auth/start", json={"email": "stranger@example.com"})
     assert res.status_code == 401
+
+
+def test_creating_a_second_project_does_not_overwrite_the_first(client):
+    enroll_and_login(client)
+    first = client.post(
+        "/api/projects",
+        json={"name": "Keep this job", "status": "Active", "team": ["U-1"], "managerId": "U-1"},
+    )
+    assert first.status_code == 200, first.text
+    first_id = first.json()["project"]["id"]
+    assert first_id == "PRJ-1001"
+    collide = client.post(
+        "/api/projects",
+        json={
+            "id": first_id,
+            "name": "Must be a new job",
+            "status": "Active",
+            "team": ["U-1"],
+            "managerId": "U-1",
+        },
+    )
+    assert collide.status_code == 200, collide.text
+    second_id = collide.json()["project"]["id"]
+    assert second_id != first_id
+    assert second_id == "PRJ-1002"
+    names = {p["id"]: p["name"] for p in client.get("/api/state").json()["state"]["projects"]}
+    assert names[first_id] == "Keep this job"
+    assert names[second_id] == "Must be a new job"
+    edited = client.put(
+        f"/api/projects/{first_id}",
+        json={"id": first_id, "name": "Keep this job (edited)", "status": "Active", "team": ["U-1"], "managerId": "U-1"},
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["project"]["id"] == first_id
+    after = {p["id"]: p["name"] for p in client.get("/api/state").json()["state"]["projects"]}
+    assert after[first_id] == "Keep this job (edited)"
+    assert after[second_id] == "Must be a new job"
+    synced = client.post(
+        "/api/sync",
+        json={"upserts": {"projects": [{"id": second_id, "name": "Must be a new job", "status": "On Hold", "team": ["U-1"], "managerId": "U-1"}]}},
+    )
+    assert synced.status_code == 200, synced.text
+    final = {p["id"]: p for p in synced.json()["state"]["projects"]}
+    assert final[first_id]["name"] == "Keep this job (edited)"
+    assert final[second_id]["status"] == "On Hold"
+    assert len(final) == 2

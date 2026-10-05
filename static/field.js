@@ -1226,7 +1226,7 @@ render(){
      <span class="muted" style="font-size:11px">${st.tested}/${st.expected||st.all} tested · ${st.verified} verified</span></td>
    <td class="flex">
      <button class="btn btn-sm ${PROJ_OPEN===p.id?'btn-p':''}" onclick="PROJ_OPEN='${p.id}';rerender()">Open</button>
-     <button class="btn btn-sm" onclick="editProject('${p.id}')">Edit</button>
+     <button class="btn btn-sm" data-act="editProject" data-id="${esc(p.id)}">Edit</button>
    </td></tr>`;
  }).join('');
  return `
@@ -1237,7 +1237,7 @@ render(){
   <div class="kpi purple"><div class="lbl">Engineers deployed</div><div class="val">${new Set(DB.projects.filter(p=>p.status==='Active').flatMap(p=>p.team||[])).size}</div></div>
  </div>
  <div class="card"><div class="card-h"><h3>All projects</h3>
-  <button class="btn btn-p btn-sm" onclick="editProject()">+ New project</button></div>
+  <button class="btn btn-p btn-sm" data-act="newProject">+ New project</button></div>
   <div class="tblwrap"><table><thead><tr><th>Project</th><th>Client / Site</th><th>Mode</th><th>Dates</th><th>Status</th><th>Team</th><th>Progress</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
  ${projectDetail()}`;
 }};
@@ -1325,7 +1325,21 @@ function editProject(id){
   <label class="f">Notes / special instructions</label><textarea id="pj_notes" rows="2">${p?esc(p.notes||''):''}</textarea>
  </div>
  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
-  <button class="btn btn-p" onclick="saveProject(${p?"'"+p.id+"'":'null'})">${p?'Save changes':'Create project'}</button></div>`,true);
+  <button class="btn btn-p" data-act="saveProject" data-id="${p?esc(p.id):''}">${p?'Save changes':'Create project'}</button></div>`,true);
+}
+function newProject(){
+ editProject(null);
+}
+function nextProjectId(){
+ ensureDbLists();
+ if(!DB.seq||typeof DB.seq!=='object')DB.seq={asset:1,usn:50001,project:1001,client:1,user:3,blancco:1,manifest:1};
+ let n=Math.max(1001, Number(DB.seq.project)||1001);
+ (DB.projects||[]).forEach(p=>{
+  const m=String(p&&p.id||'').match(/^PRJ-(\d+)$/i);
+  if(m) n=Math.max(n, Number(m[1])+1);
+ });
+ DB.seq.project=n+1;
+ return 'PRJ-'+String(n);
 }
 function saveProject(id){
  const name=$('#pj_name').value.trim();
@@ -1339,14 +1353,53 @@ function saveProject(id){
  const data={name:name,clientId:$('#pj_client').value,site:$('#pj_site').value||'—',mode:$('#pj_mode').value,
   start:$('#pj_start').value,due:$('#pj_due').value,status:$('#pj_status').value,
   managerId:$('#pj_mgr').value,team:team,scope:scope,notes:$('#pj_notes').value||''};
- if(id){Object.assign(projectById(id),data);toast('Project '+id+' updated');}
- else{
-  const nid='PRJ-'+(DB.seq.project++);
-  DB.projects.push(Object.assign({id:nid},data));
-  PROJ_OPEN=nid;
-  toast('Project '+nid+' created — '+scope.length+' categor'+(scope.length>1?'ies':'y')+', '+team.length+' engineer(s) assigned');
+ const persist=window.CircuitLoopPersist;
+ const api=persist&&persist.api;
+ const editing=!!(id&&projectById(id));
+ if(editing){
+  data.id=id;
+  const apply=function(row){
+   const cur=projectById(id);
+   if(cur) Object.assign(cur,row||data);
+   closeModal();
+   if(persist&&persist.refresh)persist.refresh();
+   else rerender();
+   toast('Project '+id+' updated');
+  };
+  if(api){
+   api('PUT','/api/projects/'+encodeURIComponent(id),data).then(function(res){apply(res&&res.project);}).catch(function(err){toast((err&&err.message)||'Could not save project');});
+   return;
+  }
+  apply(data);
+  return;
  }
- closeModal();rerender();
+ const finishCreate=function(row){
+  if(!row||!row.id){toast('Could not create project');return;}
+  const seen=projectById(row.id);
+  if(seen) Object.assign(seen,row);
+  else DB.projects.push(row);
+  const m=String(row.id||'').match(/^PRJ-(\d+)$/i);
+  if(m){
+   ensureDbLists();
+   DB.seq.project=Math.max(Number(DB.seq.project)||1001, Number(m[1])+1);
+  }
+  PROJ_OPEN=row.id;
+  closeModal();
+  if(persist&&persist.refresh)persist.refresh();
+  else rerender();
+  const cats=(row.scope||data.scope||[]).length;
+  const eng=((row.team)||data.team||[]).length;
+  toast('Project '+row.id+' created — '+cats+' categor'+(cats!==1?'ies':'y')+', '+eng+' engineer(s) assigned');
+ };
+ if(api){
+  const body=Object.assign({},data);
+  delete body.id;
+  api('POST','/api/projects',body).then(function(res){finishCreate(res&&res.project);}).catch(function(err){toast((err&&err.message)||'Could not create project');});
+  return;
+ }
+ let nid=nextProjectId();
+ while(projectById(nid)) nid=nextProjectId();
+ finishCreate(Object.assign({id:nid},data));
 }
 function completeProject(id){
  const p=projectById(id);const st=projectStats(p);
@@ -2464,6 +2517,9 @@ document.addEventListener('click',e=>{
  if(act==='confirmReplaceAuthenticator'){e.preventDefault();confirmReplaceAuthenticator();return;}
  if(act==='toggleUser'){e.preventDefault();toggleUser(btn.getAttribute('data-id'));return;}
  if(act==='closeModal'){e.preventDefault();closeModal();return;}
+ if(act==='newProject'){e.preventDefault();newProject();return;}
+ if(act==='editProject'){e.preventDefault();editProject(btn.getAttribute('data-id'));return;}
+ if(act==='saveProject'){e.preventDefault();saveProject(btn.getAttribute('data-id')||null);return;}
  if(act==='askDeleteOne'){
   e.preventDefault();
   const id=btn.getAttribute('data-id');
@@ -2489,4 +2545,8 @@ window.askDeleteAssets=askDeleteAssets;
 window.confirmDeleteAssets=confirmDeleteAssets;
 window.bulkDeleteShown=bulkDeleteShown;
 window.undoLastImport=undoLastImport;
+window.newProject=newProject;
+window.editProject=editProject;
+window.saveProject=saveProject;
+window.nextProjectId=nextProjectId;
 window.logout=logout;

@@ -138,11 +138,23 @@
     if (!Array.isArray(DB.blanccoCategories)) DB.blanccoCategories = clone(dbSeed.blanccoCategories || ["Laptop"]);
   }
 
+  function mergeSeq(localSeq, incoming) {
+    const out = Object.assign({}, incoming && typeof incoming === "object" ? incoming : {});
+    Object.keys(localSeq || {}).forEach(function (k) {
+      const a = Number(localSeq[k] || 0);
+      const b = Number(out[k] || 0);
+      if (a > b) out[k] = a;
+    });
+    return out;
+  }
+
   function applyState(state) {
     if (!state || typeof state !== "object") return;
+    const keepSeq = DB && DB.seq && typeof DB.seq === "object" ? clone(DB.seq) : {};
     Object.keys(DB).forEach((k) => delete DB[k]);
     Object.assign(DB, dbSeed, state);
     ensureLists();
+    DB.seq = mergeSeq(keepSeq, DB.seq);
     lastSnap = clone(DB);
     dirty = false;
   }

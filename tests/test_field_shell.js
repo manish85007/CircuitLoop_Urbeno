@@ -21,10 +21,11 @@ assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod21"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod19"), "prod19 cache bust");
+assert(html.includes("field.js?v=prod22"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod20"), "prod20 cache bust");
 assert(html.includes("asset-csv.js?v=prod2"), "asset-csv cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
+assert(persist.includes("function mergeSeq("), "applyState keeps seq from going backwards");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
 assert(persist.includes("DELETE") && persist.includes("/api/session"), "logout deletes session");
@@ -264,6 +265,19 @@ try {
   parsedIds = null;
 }
 assert(parsedIds && parsedIds[0] === "AST-1", "confirm data-ids parses, got: " + decoded);
+
+vm.runInContext(
+  'DB.projects=[{id:"PRJ-1001",name:"Keep me",status:"Active",team:[],scope:[],clientId:"",site:"",mode:"",start:"",due:"",managerId:"U-1"}]; DB.seq.project=1001;',
+  ctx
+);
+const newPid = vm.runInContext("nextProjectId()", ctx);
+assert(newPid !== "PRJ-1001", "next project id must not reuse the active project, got " + newPid);
+assert(/^PRJ-1002$/.test(newPid), "next project id after PRJ-1001 is PRJ-1002, got " + newPid);
+const newPid2 = vm.runInContext("nextProjectId()", ctx);
+assert(newPid2 !== newPid && newPid2 !== "PRJ-1001", "second nextProjectId is unique, got " + newPid2);
+vm.runInContext("show('projects')", ctx);
+assert(documentRef._ids.content.innerHTML.includes('data-act="newProject"'), "Projects has New project action");
+assert(!documentRef._ids.content.innerHTML.includes("onclick=\"editProject()\""), "New project is not editProject()");
 
 vm.runInContext("leaveField()", ctx);
 

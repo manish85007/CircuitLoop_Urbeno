@@ -299,6 +299,20 @@ def _next_id(seq: dict[str, Any], kind: str, prefix: str, width: int) -> str:
     return f"{prefix}{str(n).zfill(width)}"
 
 
+def _advance_seq(seq: dict[str, Any], kind: str, value: Any, prefix: str) -> None:
+    """Keep seq ahead of any id we have seen so a later create cannot reuse it."""
+    raw = str(value or "").strip()
+    if prefix and raw.upper().startswith(prefix.upper()):
+        raw = raw[len(prefix) :]
+    try:
+        n = int(raw)
+    except ValueError:
+        return
+    if n < 0:
+        return
+    seq[kind] = max(int(seq.get(kind) or 1), n + 1)
+
+
 def _history_entry(user: dict[str, Any], ev: str) -> dict[str, str]:
     return {"ts": _stamp(), "by": user.get("name") or user.get("email") or user.get("id"), "ev": ev, "server": True}
 
@@ -510,7 +524,7 @@ def upsert_client(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, An
     return row | {"_rev": saved["_rev"]}
 
 
-def upsert_project(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def upsert_project(user: dict[str, Any], payload: dict[str, Any], *, create: bool = False) -> dict[str, Any]:
     if not can_manage_projects(user):
         raise HTTPException(status_code=403, detail="Lead Engineer or Super Admin only.")
     if not isinstance(payload, dict):
@@ -521,7 +535,14 @@ def upsert_project(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
     with _lock:
         state = _read_unlocked() or empty_production_state()
         seq = dict(state.get("seq") or {})
-        pid = str(payload.get("id") or "").strip() or _next_id(seq, "project", "PRJ-", 4)
+        requested = str(payload.get("id") or "").strip()
+        if requested:
+            _advance_seq(seq, "project", requested, "PRJ-")
+        if create:
+            pid = _next_id(seq, "project", "PRJ-", 4)
+        else:
+            pid = requested or _next_id(seq, "project", "PRJ-", 4)
+        _advance_seq(seq, "project", pid, "PRJ-")
         existing = _find(state.get("projects") or [], pid) or {}
         row = dict(existing)
         team = payload.get("team") if isinstance(payload.get("team"), list) else existing.get("team") or []

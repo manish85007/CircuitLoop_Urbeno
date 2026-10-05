@@ -384,7 +384,9 @@ def update_client(client_id: str, request: Request, payload: dict[str, Any]) -> 
 @app.post("/api/projects")
 def create_project(request: Request, payload: dict[str, Any]) -> JSONResponse:
     user = require_user(request)
-    return api_json({"project": upsert_project(user, payload)})
+    payload = dict(payload or {})
+    payload.pop("id", None)
+    return api_json({"project": upsert_project(user, payload, create=True)})
 
 
 @app.put("/api/projects/{project_id}")
