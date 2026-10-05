@@ -1380,13 +1380,19 @@ function projectLabels(id){
    ASSET REGISTER (Super Admin)
    ============================================================ */
 let REG={project:'all',category:'all',status:'all',q:''};
-VIEWS.register={title:'Asset Register',crumb:'Every asset captured, tested and verified',
-render(){
- let list=DB.assets.slice();
+let LAST_IMPORT_IDS=[];
+function registerFiltered(){
+ let list=(Array.isArray(DB.assets)?DB.assets:[]).slice();
  if(REG.project!=='all')list=list.filter(a=>a.projectId===REG.project);
  if(REG.category!=='all')list=list.filter(a=>a.category===REG.category);
  if(REG.status!=='all')list=list.filter(a=>a.status===REG.status);
  if(REG.q){const q=REG.q.toLowerCase();list=list.filter(a=>(a.serial+' '+a.usn+' '+a.brand+' '+a.model+' '+a.assetTag).toLowerCase().includes(q));}
+ return list;
+}
+VIEWS.register={title:'Asset Register',crumb:'Every asset captured, tested and verified',
+render(){
+ const list=registerFiltered();
+ const admin=canEdit();
  const rows=list.slice().reverse().map(a=>`<tr data-id="${esc(a.id)}">
    <td><span class="linklike" onclick="assetDetail('${a.id}')"><b>${esc(a.serial)}</b></span>
      <div class="muted" style="font-size:11px">${esc(a.usn)}${a.assetTag?' · '+esc(a.assetTag):''}</div></td>
@@ -1401,6 +1407,7 @@ render(){
      <button class="btn btn-sm" onclick="editAssetDetails('${a.id}','assetDetail')">Edit</button>
      ${a.status==='Tested'?`<button class="btn btn-sm btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>
        <button class="btn btn-sm btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>`:''}
+     ${admin?`<button class="btn btn-sm btn-danger" onclick="askDeleteAssets(['${esc(a.id)}'],'Delete ${esc(a.serial)} from the register? Use this for a mistaken CSV import. This cannot be undone.')">Delete</button>`:''}
    </td></tr>`).join('');
  const pend=DB.assets.filter(a=>a.status==='Tested');
  return `
@@ -1412,6 +1419,7 @@ render(){
   <div class="kpi red"><div class="lbl">Rejected</div><div class="val">${DB.assets.filter(a=>a.status==='Rejected').length}</div></div>
  </div>
  ${pend.length?`<div class="warn">${pend.length} asset(s) submitted by engineers are waiting for your verification. Verify or reject them below — rejected assets go back to the engineer's open queue with your note.</div>`:''}
+ ${admin?`<div class="info">Super Admin can <b>Delete</b> a mistaken bulk-upload row, <b>Delete shown</b> for the current filters, or <b>Undo last import</b> if the last CSV add was wrong. Deleting removes the row from the live register; it does not wipe /data.</div>`:''}
  <div class="card"><div class="card-h"><h3>Register</h3>
   <div class="flex">
    <input placeholder="Search serial / USN / model" value="${esc(REG.q)}" oninput="REG.q=this.value;rerenderRegister()" style="max-width:230px">
@@ -1422,6 +1430,8 @@ render(){
    <button class="btn btn-sm btn-p" onclick="openAssetCsvImport()">⬆ Import CSV</button>
    <button class="btn btn-sm" onclick="downloadAssetCsvTemplate()">⬇ Template</button>
    <button class="btn btn-sm" onclick="bulkVerify()">✓ Verify all shown</button>
+   ${admin?`<button class="btn btn-sm btn-danger" onclick="bulkDeleteShown()">Delete shown</button>
+    <button class="btn btn-sm btn-danger" onclick="undoLastImport()" ${LAST_IMPORT_IDS.length?'':'disabled'}>Undo last import${LAST_IMPORT_IDS.length?' ('+LAST_IMPORT_IDS.length+')':''}</button>`:''}
   </div></div>
   <div class="tblwrap"><table><thead><tr><th>Serial / USN</th><th>Asset</th><th>Project</th><th>Status</th><th>Grade</th><th>Tested by</th><th>Blancco</th><th></th></tr></thead>
   <tbody id="regbody">${rows||'<tr><td colspan=8 class=muted>No assets match these filters.</td></tr>'}</tbody></table></div>
@@ -1469,6 +1479,7 @@ function assetDetail(id){
   <button class="btn" onclick="editAssetDetails('${a.id}','assetDetail')">Edit details</button>
   ${a.status==='Tested'?`<button class="btn btn-danger" onclick="rejectAsset('${a.id}')">✗ Reject</button>
     <button class="btn btn-p" onclick="verifyAsset('${a.id}')">✓ Verify</button>`:''}
+  ${canEdit()?`<button class="btn btn-danger" onclick="askDeleteAssets(['${esc(a.id)}'],'Delete ${esc(a.serial)} from the register? Use this for a mistaken CSV import. This cannot be undone.')">Delete</button>`:''}
   <button class="btn" onclick="closeModal()">Close</button></div>`,true);
 }
 function verifyAsset(id){
@@ -1518,6 +1529,46 @@ function bulkVerify(){
  });
  rerender();
  toast(n?n+' asset(s) verified'+(skip?', '+skip+' skipped (incomplete tests)':''):'Nothing eligible to verify'+(skip?' — '+skip+' blocked':''));
+}
+function askDeleteAssets(ids,message){
+ if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
+ const list=(ids||[]).map(id=>String(id||'').trim()).filter(Boolean);
+ if(!list.length){toast('Nothing to delete');return;}
+ openModal(`<div class="modal-h"><h3>Delete from register</h3><button class="x" onclick="closeModal()">×</button></div>
+ <div class="modal-b">
+  <div class="warn">${esc(message||('Delete '+list.length+' asset(s) from the register? Use this for a mistaken CSV import. This cannot be undone.'))}</div>
+  <div class="muted" style="font-size:12px;margin-top:8px">${list.length} row(s) will be removed from the live register. Other assets stay. /data is not wiped.</div>
+ </div>
+ <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-danger" onclick="confirmDeleteAssets(${JSON.stringify(list).replace(/</g,'\\u003c')})">Delete</button></div>`);
+}
+function confirmDeleteAssets(ids){
+ if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
+ const list=(ids||[]).map(id=>String(id||'').trim()).filter(Boolean);
+ const api=window.CircuitLoopPersist&&CircuitLoopPersist.api;
+ if(!api){toast('Could not reach CircuitLoop');return;}
+ api('POST','/api/assets/delete',{ids:list}).then(function(res){
+  const gone=new Set((res&&res.ids)||list);
+  DB.assets=(DB.assets||[]).filter(a=>!gone.has(a.id));
+  LAST_IMPORT_IDS=(LAST_IMPORT_IDS||[]).filter(id=>!gone.has(id));
+  if(res&&res.state&&window.CircuitLoopPersist&&CircuitLoopPersist.applyState)CircuitLoopPersist.applyState(res.state);
+  closeModal();
+  rerender();
+  toast('Deleted '+(res&&res.deleted!=null?res.deleted:gone.size)+' asset(s).');
+ }).catch(function(err){toast((err&&err.message)||'Could not delete');});
+}
+function bulkDeleteShown(){
+ if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
+ const list=registerFiltered();
+ if(!list.length){toast('No assets match these filters');return;}
+ askDeleteAssets(list.map(a=>a.id),'Delete '+list.length+' shown asset(s) from the register? Use this after a mistaken CSV import. This cannot be undone.');
+}
+function undoLastImport(){
+ if(!canEdit()){toast('Only a Super Admin can delete assets.');return;}
+ if(!LAST_IMPORT_IDS.length){toast('No last import to undo in this session');return;}
+ const still=(DB.assets||[]).filter(a=>LAST_IMPORT_IDS.indexOf(a.id)>=0);
+ if(!still.length){LAST_IMPORT_IDS=[];toast('Those imported rows are already gone');rerender();return;}
+ askDeleteAssets(still.map(a=>a.id),'Undo last CSV import — delete '+still.length+' device(s) added in this session? This cannot be undone.');
 }
 
 /* ============================================================
@@ -2305,7 +2356,7 @@ function openAssetCsvImport(){
  openModal(`
  <div class="modal-h"><h3>⬆ Import tested devices (CSV)</h3><button class="x" onclick="closeModal()">×</button></div>
  <div class="modal-b">
-  <div class="info">Excel: <b>Save as CSV</b>. Required: ${req}. Each CircuitLoop test parameter is its own <span class="tag">Test: key</span> column (Pass / Fail / N/A). Each spec field is its own <span class="tag">Spec: name</span> column. Leave cells blank for other categories. USN is assigned if blank. Empty serial / NoSerial becomes <b>NoSerial-n</b> on that project. Duplicate serials are skipped — existing devices stay. Import <b>adds</b> rows; it does not wipe the live register.</div>
+  <div class="info">Excel: <b>Save as CSV</b>. Required: ${req}. Each CircuitLoop test parameter is its own <span class="tag">Test: key</span> column (Pass / Fail / N/A). Each spec field is its own <span class="tag">Spec: name</span> column. Leave cells blank for other categories. USN is assigned if blank. Empty serial / NoSerial becomes <b>NoSerial-n</b> on that project. Duplicate serials are skipped — existing devices stay. Import <b>adds</b> rows; it does not wipe the live register. Super Admin can <b>Delete</b> a mistaken row, <b>Delete shown</b>, or <b>Undo last import</b>.</div>
   <div class="flex" style="margin-bottom:10px">
    <button class="btn btn-sm" onclick="downloadAssetCsvTemplate()">⬇ Download template</button>
   </div>
@@ -2359,12 +2410,15 @@ function applyAssetImport(){
  if(!IMPORT_PREVIEW||!IMPORT_PREVIEW.ready.length){toast('Nothing to import — preview the CSV first');return;}
  const before=DB.assets.length;
  let added=0,skipped=0;
+ const ids=[];
  IMPORT_PREVIEW.ready.forEach(item=>{
   const a=item.asset;if(!a)return;
   if(serialTaken(a.serial,a.projectId)){skipped++;return;}
   DB.assets.push(a);
+  ids.push(a.id);
   added++;
  });
+ LAST_IMPORT_IDS=ids;
  if(IMPORT_PREVIEW.seq){
   DB.seq.asset=Math.max(DB.seq.asset||0,IMPORT_PREVIEW.seq.asset||0);
   DB.seq.usn=Math.max(DB.seq.usn||0,IMPORT_PREVIEW.seq.usn||0);
@@ -2374,7 +2428,7 @@ function applyAssetImport(){
  closeModal();
  rerender();
  const extra=skipped?(' '+skipped+' skipped as duplicates at import time.'):'';
- toast('Imported '+added+' device(s). Register now '+(before+added)+' (was '+before+'). Existing data was not wiped.'+extra);
+ toast('Imported '+added+' device(s). Register now '+(before+added)+' (was '+before+'). Existing data was not wiped.'+extra+(canEdit()&&added?' Super Admin can Delete or Undo last import if this CSV was wrong.':''));
 }
 
 /* ============================================================
@@ -2409,4 +2463,8 @@ window.show=show;
 window.editUser=editUser;
 window.saveUser=saveUser;
 window.toggleUser=toggleUser;
+window.askDeleteAssets=askDeleteAssets;
+window.confirmDeleteAssets=confirmDeleteAssets;
+window.bulkDeleteShown=bulkDeleteShown;
+window.undoLastImport=undoLastImport;
 window.logout=logout;

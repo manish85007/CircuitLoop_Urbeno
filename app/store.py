@@ -859,6 +859,48 @@ def import_assets(user: dict[str, Any], assets: list[dict[str, Any]]) -> dict[st
     return {"added": len(added), "skipped": len(skipped), "errors": errors, "ids": added}
 
 
+def delete_assets(user: dict[str, Any], ids: list[Any]) -> dict[str, Any]:
+    """Super Admin only. Removes mistaken register rows (CSV import errors). Never wipes /data."""
+    if not is_super_admin(user):
+        raise HTTPException(status_code=403, detail="Super Admin only.")
+    want = []
+    seen: set[str] = set()
+    for raw in ids or []:
+        aid = str(raw or "").strip()
+        if not aid or aid in seen:
+            continue
+        seen.add(aid)
+        want.append(aid)
+    if not want:
+        raise HTTPException(status_code=400, detail="ids[] is required.")
+    if len(want) > 2000:
+        raise HTTPException(status_code=400, detail="Too many assets in one delete.")
+    with _lock:
+        state = _read_unlocked() or empty_production_state()
+        assets = list(state.get("assets") or [])
+        want_set = set(want)
+        keep: list[Any] = []
+        removed: list[dict[str, Any]] = []
+        for row in assets:
+            if isinstance(row, dict) and str(row.get("id") or "") in want_set:
+                removed.append({"id": row.get("id"), "serial": row.get("serial") or ""})
+            else:
+                keep.append(row)
+        if not removed:
+            raise HTTPException(status_code=404, detail="Asset not found.")
+        state["assets"] = keep
+        saved = _write_unlocked(state)
+    for row in removed:
+        append_audit(user, "asset.delete", "asset", str(row.get("id") or ""), str(row.get("serial") or ""))
+    return {
+        "ok": True,
+        "deleted": len(removed),
+        "ids": [str(r.get("id") or "") for r in removed],
+        "_rev": saved["_rev"],
+        "state": filter_state_for_user(saved, user),
+    }
+
+
 def attach_blancco_report(user: dict[str, Any], asset_id: str, report: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(report, dict) or not report.get("reportId"):
         raise HTTPException(status_code=400, detail="Not a Blancco API report.")

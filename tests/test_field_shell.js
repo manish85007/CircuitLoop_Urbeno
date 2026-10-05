@@ -21,7 +21,7 @@ assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod19"), "field.js cache bust");
+assert(html.includes("field.js?v=prod20"), "field.js cache bust");
 assert(html.includes("persist.js?v=prod18"), "prod18 cache bust");
 assert(html.includes("asset-csv.js?v=prod2"), "asset-csv cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
@@ -41,6 +41,15 @@ assert(field.includes("Spec: Storage"), "Storage spec column");
 assert(!field.includes("'Specifications','Remarks','Rejection Note'"), "no packed Specifications column");
 assert(!field.includes("Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; ')"), "specs not packed into one CSV cell");
 assert(field.includes("function isReviewer("), "isReviewer helper");
+assert(field.includes("function askDeleteAssets("), "askDeleteAssets helper");
+assert(field.includes("function confirmDeleteAssets("), "confirmDeleteAssets helper");
+assert(field.includes("function bulkDeleteShown("), "bulkDeleteShown helper");
+assert(field.includes("function undoLastImport("), "undoLastImport helper");
+assert(field.includes("Undo last import"), "Undo last import control");
+assert(field.includes("Delete shown"), "Delete shown control");
+assert(field.includes("/api/assets/delete"), "delete API");
+assert(field.includes("LAST_IMPORT_IDS"), "last import ids");
+assert(field.includes("Super Admin can Delete or Undo last import"), "import toast undo");
 assert(persist.includes("previewCode"), "preview email OTP shown on-screen");
 
 function fakeDom() {
@@ -215,6 +224,20 @@ assert(documentRef._ids.nav.innerHTML.includes("Reports"), "Lead nav has Reports
 assert(!documentRef._ids.nav.innerHTML.includes(">Users<") && !documentRef._ids.nav.innerHTML.includes("Users</a>"), "Lead nav hides Users, got: " + documentRef._ids.nav.innerHTML);
 assert(!documentRef._ids.nav.innerHTML.includes("Masters"), "Lead nav hides Masters");
 assert(documentRef._ids.whoami.textContent.includes("Lead Engineer"), "whoami Lead Engineer");
+vm.runInContext("show('register')", ctx);
+assert(!documentRef._ids.content.innerHTML.includes("Delete shown"), "Lead Engineer has no Delete shown");
+assert(!documentRef._ids.content.innerHTML.includes("Undo last import"), "Lead Engineer has no Undo last import");
+assert(!documentRef._ids.content.innerHTML.includes(">Delete</button>"), "Lead Engineer has no row Delete");
+
+vm.runInContext("leaveField()", ctx);
+vm.runInContext(
+  'enterField({id:"U-1",name:"Manish Kumar",email:"manish@urbeno.in",role:"Super Admin"})',
+  ctx
+);
+vm.runInContext("show('register')", ctx);
+assert(documentRef._ids.content.innerHTML.includes("Delete shown"), "Super Admin has Delete shown, got: " + documentRef._ids.content.innerHTML.slice(0, 400));
+assert(documentRef._ids.content.innerHTML.includes("Undo last import"), "Super Admin has Undo last import");
+assert(documentRef._ids.content.innerHTML.includes("mistaken bulk-upload"), "Super Admin register explains delete");
 
 vm.runInContext("leaveField()", ctx);
 

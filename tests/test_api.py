@@ -220,7 +220,7 @@ def test_index_production_login(client):
     assert "Demo (simulated)" not in html
     assert "persist.js?v=prod18" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod19" in html
+    assert "field.js?v=prod20" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -237,6 +237,12 @@ def test_index_production_login(client):
     assert "Spec: Processor" in field.text
     assert "Object.entries(a.specs||{}).map(([k,v])=>k+': '+v).join('; ')" not in field.text
     assert "function canonicalizeRole(" in field.text
+    assert "function askDeleteAssets(" in field.text
+    assert "function confirmDeleteAssets(" in field.text
+    assert "function undoLastImport(" in field.text
+    assert "Undo last import" in field.text
+    assert "LAST_IMPORT_IDS" in field.text
+    assert "/api/assets/delete" in field.text
     assert "Lead Engineer" in field.text
     assert "Access level" in field.text
     assert "function ensureDbLists(" in field.text
@@ -723,6 +729,101 @@ def test_super_admin_changes_existing_user_access_level(client):
     assert users.status_code == 403
     config = client.put("/api/config", json={"categories": ["Laptop"]})
     assert config.status_code == 403
+
+
+def test_super_admin_deletes_mistaken_bulk_upload(client):
+    enroll_and_login(client)
+    client.post("/api/projects", json={"name": "Job", "status": "Active", "team": ["U-1"], "managerId": "U-1"})
+    keep = client.post(
+        "/api/assets",
+        json={"serial": "KEEP-1", "projectId": "PRJ-1001", "category": "Monitor", "status": "Registered"},
+    )
+    assert keep.status_code == 200
+    keep_id = keep.json()["asset"]["id"]
+    imported = client.post(
+        "/api/assets/import",
+        json={
+            "assets": [
+                {
+                    "serial": "CSV-WRONG-1",
+                    "projectId": "PRJ-1001",
+                    "category": "Laptop",
+                    "status": "Registered",
+                    "brand": "Dell",
+                },
+                {
+                    "serial": "CSV-WRONG-2",
+                    "projectId": "PRJ-1001",
+                    "category": "Laptop",
+                    "status": "Registered",
+                    "brand": "HP",
+                },
+            ]
+        },
+    )
+    assert imported.status_code == 200, imported.text
+    body = imported.json()
+    assert body["added"] == 2
+    ids = body["ids"]
+    assert len(ids) == 2
+    bad = client.post("/api/assets/delete", json={"ids": []})
+    assert bad.status_code == 400
+    missing = client.post("/api/assets/delete", json={"ids": ["AST-does-not-exist"]})
+    assert missing.status_code == 404
+    deleted = client.post("/api/assets/delete", json={"ids": ids})
+    assert deleted.status_code == 200, deleted.text
+    out = deleted.json()
+    assert out["ok"] is True
+    assert out["deleted"] == 2
+    serials = {a["serial"] for a in out["state"]["assets"]}
+    assert serials == {"KEEP-1"}
+    assert keep_id in {a["id"] for a in out["state"]["assets"]}
+    live = client.get("/api/state").json()["state"]
+    assert {a["serial"] for a in live["assets"]} == {"KEEP-1"}
+    extra = client.post(
+        "/api/assets",
+        json={"serial": "CSV-WRONG-3", "projectId": "PRJ-1001", "category": "Monitor", "status": "Registered"},
+    )
+    extra_id = extra.json()["asset"]["id"]
+    one = client.delete(f"/api/assets/{extra_id}")
+    assert one.status_code == 200, one.text
+    assert one.json()["deleted"] == 1
+    leftover = {a["serial"] for a in client.get("/api/state").json()["state"]["assets"]}
+    assert leftover == {"KEEP-1"}
+    from app.config import DATA_DIR
+
+    assert DATA_DIR.exists()
+    client.delete("/api/session")
+    enroll_and_login(client, "darshak@urbeno.in")
+    blocked = client.post("/api/assets/delete", json={"ids": [keep_id]})
+    assert blocked.status_code == 403
+    assert "super admin" in blocked.json()["error"].lower()
+    client.delete("/api/session")
+    enroll_and_login(client)
+    still = client.get("/api/state").json()["state"]
+    assert {a["serial"] for a in still["assets"]} == {"KEEP-1"}
+
+
+def test_lead_engineer_cannot_delete_assets(client):
+    enroll_and_login(client)
+    client.put(
+        "/api/users/U-2",
+        json={"id": "U-2", "name": "Darshak", "email": "darshak@urbeno.in", "role": "Lead Engineer"},
+    )
+    client.post("/api/projects", json={"name": "Job", "status": "Active", "team": ["U-1", "U-2"], "managerId": "U-1"})
+    created = client.post(
+        "/api/assets",
+        json={"serial": "LEAD-DEL-1", "projectId": "PRJ-1001", "category": "Monitor", "status": "Registered"},
+    )
+    aid = created.json()["asset"]["id"]
+    client.delete("/api/session")
+    enroll_and_login(client, "darshak@urbeno.in")
+    blocked = client.post("/api/assets/delete", json={"ids": [aid]})
+    assert blocked.status_code == 403
+    blocked_one = client.delete(f"/api/assets/{aid}")
+    assert blocked_one.status_code == 403
+    leftover = client.get("/api/state").json()["state"]
+    assert any(a["id"] == aid for a in leftover["assets"])
 
 
 def test_unknown_email_still_rejected_after_roster_grows(client):

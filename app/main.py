@@ -45,6 +45,7 @@ from app.store import (
     apply_sync,
     cutover_if_needed,
     empty_production_state,
+    delete_assets,
     filter_state_for_user,
     import_assets,
     load_state,
@@ -349,6 +350,21 @@ def import_asset_rows(request: Request, payload: dict[str, Any]) -> JSONResponse
     if not isinstance(rows, list):
         raise HTTPException(status_code=400, detail="assets[] is required.")
     return api_json(import_assets(user, rows))
+
+
+@app.post("/api/assets/delete")
+def delete_asset_rows(request: Request, payload: dict[str, Any]) -> JSONResponse:
+    user = require_admin(request)
+    ids = payload.get("ids") if isinstance(payload, dict) else None
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="ids[] is required.")
+    return api_json(delete_assets(user, ids))
+
+
+@app.delete("/api/assets/{asset_id}")
+def delete_one_asset(asset_id: str, request: Request) -> JSONResponse:
+    user = require_admin(request)
+    return api_json(delete_assets(user, [asset_id]))
 
 
 @app.post("/api/clients")
