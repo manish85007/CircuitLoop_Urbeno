@@ -332,6 +332,8 @@ def sync_records(request: Request, body: SyncIn) -> JSONResponse:
 @app.post("/api/assets")
 def create_asset(request: Request, payload: dict[str, Any]) -> JSONResponse:
     user = require_user(request)
+    payload = dict(payload or {})
+    payload["_create"] = True
     return api_json({"asset": upsert_asset(user, payload)})
 
 
@@ -340,6 +342,7 @@ def update_asset(asset_id: str, request: Request, payload: dict[str, Any]) -> JS
     user = require_user(request)
     payload = dict(payload)
     payload["id"] = asset_id
+    payload.pop("_create", None)
     return api_json({"asset": upsert_asset(user, payload)})
 
 

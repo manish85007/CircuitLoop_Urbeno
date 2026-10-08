@@ -21,11 +21,13 @@ assert(field.includes("data-act=\"addUser\""), "Add user action");
 assert(!field.includes("New users cannot be added"), "create users enabled");
 assert(field.includes("function leaveField("), "leaveField in field.js");
 assert(field.includes("function paintNav("), "paintNav in field.js");
-assert(html.includes("field.js?v=prod22"), "field.js cache bust");
-assert(html.includes("persist.js?v=prod20"), "prod20 cache bust");
+assert(html.includes("field.js?v=prod23"), "field.js cache bust");
+assert(html.includes("persist.js?v=prod21"), "prod21 cache bust");
 assert(html.includes("asset-csv.js?v=prod2"), "asset-csv cache bust");
 assert(persist.includes("Object.assign(DB, dbSeed, state)"), "applyState merges seed");
 assert(persist.includes("function mergeSeq("), "applyState keeps seq from going backwards");
+assert(persist.includes("function mergeMasters("), "hydrate repairs swapped spec/test legends");
+assert(persist.includes("copy._create = true"), "new asset rows are marked _create");
 assert(persist.includes("window.enterField"), "persist calls enterField");
 assert(persist.includes("window.leaveField"), "persist calls leaveField");
 assert(persist.includes("DELETE") && persist.includes("/api/session"), "logout deletes session");
@@ -194,6 +196,9 @@ try {
   process.exit(1);
 }
 
+const seedTestParams = vm.runInContext("JSON.parse(JSON.stringify(DB.testParams))", ctx);
+const seedSpecFields = vm.runInContext("JSON.parse(JSON.stringify(DB.specFields))", ctx);
+
 vm.runInContext(
   "DB.users=[];DB.projects=undefined;DB.assets=undefined;DB.clients=undefined;DB.blanccoCategories=undefined;DB.testParams=undefined;",
   ctx
@@ -278,6 +283,118 @@ assert(newPid2 !== newPid && newPid2 !== "PRJ-1001", "second nextProjectId is un
 vm.runInContext("show('projects')", ctx);
 assert(documentRef._ids.content.innerHTML.includes('data-act="newProject"'), "Projects has New project action");
 assert(!documentRef._ids.content.innerHTML.includes("onclick=\"editProject()\""), "New project is not editProject()");
+
+vm.runInContext("leaveField()", ctx);
+
+vm.runInContext(
+  'enterField({id:"U-1",name:"Manish Kumar",email:"manish@urbeno.in",role:"Super Admin"})',
+  ctx
+);
+vm.runInContext(
+  "DB.testParams=" + JSON.stringify(seedTestParams) + ";DB.specFields=" + JSON.stringify(seedSpecFields) + ";",
+  ctx
+);
+assert(vm.runInContext("specsFor('Laptop').indexOf('Processor')>=0", ctx), "Laptop specs include Processor");
+assert(vm.runInContext("specsFor('Laptop').indexOf('Panel Type')<0", ctx), "Laptop specs are not Monitor");
+assert(vm.runInContext("specsFor('Monitor').indexOf('Panel Type')>=0", ctx), "Monitor specs include Panel Type");
+assert(vm.runInContext("specsFor('Desktop').indexOf('Form Factor')>=0", ctx), "Desktop specs include Form Factor");
+assert(vm.runInContext("specsFor('Printer').indexOf('Mono/Colour')>=0", ctx), "Printer specs include Mono/Colour");
+assert(vm.runInContext("paramsFor('Tablet').some(p=>p.key==='cameras')", ctx), "Tablet checklist has cameras");
+assert(vm.runInContext("paramsFor('Server').some(p=>p.key==='raid')", ctx), "Server checklist has RAID");
+assert(vm.runInContext("paramsFor('Laptop').some(p=>p.key==='keyboard')", ctx), "Laptop checklist has keyboard");
+assert(vm.runInContext("!paramsFor('Laptop').some(p=>p.key==='panel')", ctx), "Laptop checklist is not Monitor");
+assert(vm.runInContext("canonCategory('laptop')==='Laptop'", ctx), "canonCategory maps laptop");
+assert(vm.runInContext("canonCategory('All-in-one')==='All-in-One'", ctx), "canonCategory maps All-in-One");
+
+vm.runInContext(
+  `DB.projects=[{id:"PRJ-1001",name:"Job",status:"Active",team:["U-1"],scope:[{category:"Laptop",expected:2},{category:"Monitor",expected:2}],clientId:"",site:"",mode:"",start:"",due:"",managerId:"U-1"}];
+   ACTIVE_PROJECT="PRJ-1001";
+   DB.seq.asset=1; DB.seq.usn=50001;
+   DB.assets=[{id:"AST-00001",usn:"URB-050001",serial:"MON-1",category:"Monitor",brand:"Dell",model:"P2422H",projectId:"PRJ-1001",status:"Registered",tests:{},specs:{"Panel Type":"IPS"},history:[]}];
+   show("testing");`,
+  ctx
+);
+const testingHtml = documentRef._ids.content.innerHTML;
+assert(testingHtml.includes("<th>Serial / USN</th>"), "testing table has Serial / USN header");
+assert(testingHtml.includes("<th>Asset</th>"), "testing table has Asset header");
+assert(testingHtml.includes("<th>Status</th>"), "testing table has Status header");
+assert(testingHtml.includes("MON-1"), "testing table shows monitor serial");
+assert(testingHtml.includes("Monitor"), "testing table shows Monitor category");
+assert(testingHtml.includes("data-cat=\"Monitor\""), "testing row is tagged Monitor");
+
+const minted = vm.runInContext("genAssetId()", ctx);
+assert(minted !== "AST-00001", "genAssetId skips the Monitor id, got " + minted);
+assert(/^AST-00002$/.test(minted), "next asset after AST-00001 is AST-00002, got " + minted);
+
+vm.runInContext(
+  `DB.assets.push({id:genAssetId(),usn:genUSN(),serial:"LAP-1",category:"Laptop",brand:"HP",model:"840",projectId:"PRJ-1001",status:"In Testing",tests:{},specs:{Processor:"i5"},history:[],_create:true});
+   show("testing");`,
+  ctx
+);
+const bothHtml = documentRef._ids.content.innerHTML;
+assert(bothHtml.includes("LAP-1") && bothHtml.includes("Laptop"), "testing table shows the Laptop row");
+assert(bothHtml.includes("MON-1") && bothHtml.includes("Monitor"), "testing table still shows the Monitor row");
+assert(vm.runInContext("assetById(DB.assets.find(a=>a.serial==='LAP-1').id).category", ctx) === "Laptop", "Laptop row stays Laptop");
+assert(vm.runInContext("assetById('AST-00001').category", ctx) === "Monitor", "Monitor id still Monitor");
+
+const ids = {};
+function inputEl(id, value) {
+  const node = {
+    id,
+    value: value || "",
+    tagName: "SELECT",
+    className: "",
+    innerHTML: "",
+    textContent: "",
+    style: {},
+    dataset: {},
+    children: [],
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+  };
+  ids[id] = node;
+  return node;
+}
+const raCat = inputEl("ra_cat", "Laptop");
+const raSpecsBox = inputEl("ra_specs", "");
+documentRef._ids.ra_cat = raCat;
+documentRef._ids.ra_specs = raSpecsBox;
+const origGet = documentRef.getElementById.bind(documentRef);
+documentRef.getElementById = function (id) {
+  return ids[id] || origGet(id);
+};
+const origQs = documentRef.querySelector.bind(documentRef);
+documentRef.querySelector = function (sel) {
+  if (sel === "#ra_cat") return raCat;
+  if (sel === "#ra_specs") return raSpecsBox;
+  return origQs(sel);
+};
+
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("Processor"), "Laptop raSpecs shows Processor, got: " + raSpecsBox.innerHTML.slice(0, 240));
+assert(!raSpecsBox.innerHTML.includes("Panel Type"), "Laptop raSpecs does not show Monitor Panel Type");
+raCat.value = "Monitor";
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("Panel Type"), "switching to Monitor loads Panel Type");
+assert(!raSpecsBox.innerHTML.includes("Processor"), "Monitor raSpecs does not keep Laptop Processor");
+raCat.value = "Desktop";
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("Form Factor"), "Desktop raSpecs shows Form Factor");
+raCat.value = "Printer";
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("Mono/Colour"), "Printer raSpecs shows Mono/Colour");
+raCat.value = "Tablet";
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("Cellular"), "Tablet raSpecs shows Cellular");
+raCat.value = "Server";
+vm.runInContext("raSpecs()", ctx);
+assert(raSpecsBox.innerHTML.includes("RAID"), "Server raSpecs shows RAID");
+
+assert(field.includes("function nextAssetId("), "nextAssetId helper");
+assert(field.includes("function canonCategory("), "canonCategory helper");
+assert(field.includes("function assetById("), "assetById prefers last matching id");
+assert(field.includes("_create:true"), "new captures are marked _create");
+assert(field.includes("Select category"), "register requires an explicit category");
 
 vm.runInContext("leaveField()", ctx);
 

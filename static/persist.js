@@ -148,12 +148,83 @@
     return out;
   }
 
+  function legendOverlap(have, seed) {
+    const want = {};
+    (seed || []).forEach(function (v) {
+      const k = String(v || "").trim();
+      if (k) want[k] = true;
+    });
+    const keys = Object.keys(want);
+    if (!keys.length) return 1;
+    let hit = 0;
+    (have || []).forEach(function (v) {
+      if (want[String(v || "").trim()]) hit += 1;
+    });
+    return hit / keys.length;
+  }
+
+  function paramKeys(list) {
+    const out = {};
+    (list || []).forEach(function (row) {
+      if (row && row.key) out[String(row.key)] = true;
+    });
+    return out;
+  }
+
+  function paramOverlap(have, seed) {
+    const want = paramKeys(seed);
+    const keys = Object.keys(want);
+    if (!keys.length) return 1;
+    const got = paramKeys(have);
+    let hit = 0;
+    keys.forEach(function (k) {
+      if (got[k]) hit += 1;
+    });
+    return hit / keys.length;
+  }
+
+  function mergeMasters() {
+    const seedSpecs = dbSeed.specFields || {};
+    const seedParams = dbSeed.testParams || {};
+    const specs = Object.assign({}, clone(seedSpecs), DB.specFields && typeof DB.specFields === "object" ? DB.specFields : {});
+    const params = Object.assign({}, clone(seedParams), DB.testParams && typeof DB.testParams === "object" ? DB.testParams : {});
+    Object.keys(seedSpecs).forEach(function (cat) {
+      const have = specs[cat];
+      const seed = seedSpecs[cat] || [];
+      if (!Array.isArray(have) || !have.length) {
+        specs[cat] = clone(seed);
+        return;
+      }
+      if (legendOverlap(have, seed) >= 0.5) return;
+      Object.keys(seedSpecs).forEach(function (other) {
+        if (other === cat) return;
+        if (legendOverlap(have, seedSpecs[other]) >= 0.5) specs[cat] = clone(seed);
+      });
+    });
+    Object.keys(seedParams).forEach(function (cat) {
+      const have = params[cat];
+      const seed = seedParams[cat] || [];
+      if (!Array.isArray(have) || !have.length) {
+        params[cat] = clone(seed);
+        return;
+      }
+      if (paramOverlap(have, seed) >= 0.5) return;
+      Object.keys(seedParams).forEach(function (other) {
+        if (other === cat) return;
+        if (paramOverlap(have, seedParams[other]) >= 0.5) params[cat] = clone(seed);
+      });
+    });
+    DB.specFields = specs;
+    DB.testParams = params;
+  }
+
   function applyState(state) {
     if (!state || typeof state !== "object") return;
     const keepSeq = DB && DB.seq && typeof DB.seq === "object" ? clone(DB.seq) : {};
     Object.keys(DB).forEach((k) => delete DB[k]);
     Object.assign(DB, dbSeed, state);
     ensureLists();
+    mergeMasters();
     DB.seq = mergeSeq(keepSeq, DB.seq);
     lastSnap = clone(DB);
     dirty = false;
@@ -190,7 +261,12 @@
     (localList || []).forEach((row) => {
       if (!row || !row.id) return;
       const prev = remote[row.id];
-      if (!prev || JSON.stringify(prev) !== JSON.stringify(row)) out.push(row);
+      if (!prev || JSON.stringify(prev) !== JSON.stringify(row)) {
+        const copy = Object.assign({}, row);
+        if (!prev || row._create) copy._create = true;
+        else delete copy._create;
+        out.push(copy);
+      }
     });
     return out;
   }

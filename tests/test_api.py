@@ -218,9 +218,9 @@ def test_index_production_login(client):
     assert "Demo build" not in html
     assert "mkAsset(" not in html
     assert "Demo (simulated)" not in html
-    assert "persist.js?v=prod20" in html
+    assert "persist.js?v=prod21" in html
     assert "qrcode.min.js?v=prod15" in html
-    assert "field.js?v=prod22" in html
+    assert "field.js?v=prod23" in html
     assert "not a QR from this card" not in html
     assert "Email OTP is offered only when SMTP is configured" not in html
     assert "integrity=" in html
@@ -891,3 +891,207 @@ def test_creating_a_second_project_does_not_overwrite_the_first(client):
     assert final[first_id]["name"] == "Keep this job (edited)"
     assert final[second_id]["status"] == "On Hold"
     assert len(final) == 2
+
+
+def _project_for_assets(client):
+    enroll_and_login(client)
+    client.post("/api/clients", json={"name": "Type mix client", "blanccoOptIn": False})
+    res = client.post(
+        "/api/projects",
+        json={
+            "name": "Scan mix job",
+            "clientId": "CL-1",
+            "status": "Active",
+            "team": ["U-1"],
+            "managerId": "U-1",
+            "scope": [
+                {"category": "Laptop", "expected": 2},
+                {"category": "Monitor", "expected": 2},
+                {"category": "Desktop", "expected": 1},
+                {"category": "Printer", "expected": 1},
+                {"category": "Tablet", "expected": 1},
+                {"category": "Server", "expected": 1},
+            ],
+        },
+    )
+    assert res.status_code == 200, res.text
+    return res.json()["project"]["id"]
+
+
+def _by_serial(state):
+    return {a["serial"]: a for a in state["assets"]}
+
+
+def test_new_laptop_does_not_overwrite_monitor_on_colliding_id(client):
+    pid = _project_for_assets(client)
+    monitor = client.post(
+        "/api/assets",
+        json={
+            "id": "AST-00001",
+            "serial": "MON-KEEP",
+            "usn": "URB-050001",
+            "projectId": pid,
+            "category": "Monitor",
+            "brand": "Dell",
+            "model": "P2422H",
+            "status": "Registered",
+            "specs": {"Screen Size": "24", "Panel Type": "IPS", "Resolution": "1920x1080"},
+        },
+    )
+    assert monitor.status_code == 200, monitor.text
+    mon = monitor.json()["asset"]
+    assert mon["id"] == "AST-00001"
+    assert mon["category"] == "Monitor"
+    laptop = client.post(
+        "/api/assets",
+        json={
+            "id": "AST-00001",
+            "serial": "LAP-NEW",
+            "usn": "URB-050002",
+            "projectId": pid,
+            "category": "Laptop",
+            "brand": "HP",
+            "model": "EliteBook",
+            "status": "In Testing",
+            "specs": {"Processor": "i5", "RAM": "16GB", "Storage": "512GB SSD"},
+        },
+    )
+    assert laptop.status_code == 200, laptop.text
+    lap = laptop.json()["asset"]
+    assert lap["id"] != mon["id"]
+    assert lap["category"] == "Laptop"
+    assert lap["serial"] == "LAP-NEW"
+    assert "Processor" in (lap.get("specs") or {})
+    state = client.get("/api/state").json()["state"]
+    by = _by_serial(state)
+    assert by["MON-KEEP"]["id"] == "AST-00001"
+    assert by["MON-KEEP"]["category"] == "Monitor"
+    assert by["MON-KEEP"]["specs"]["Panel Type"] == "IPS"
+    assert by["LAP-NEW"]["category"] == "Laptop"
+    assert by["LAP-NEW"]["id"] != by["MON-KEEP"]["id"]
+    assert by["LAP-NEW"]["specs"]["Processor"] == "i5"
+
+
+def test_sync_create_keeps_desktop_printer_and_tablet_server_apart(client):
+    pid = _project_for_assets(client)
+    desktop = client.post(
+        "/api/assets",
+        json={
+            "serial": "DSK-KEEP",
+            "projectId": pid,
+            "category": "Desktop",
+            "brand": "Lenovo",
+            "model": "M720",
+            "status": "Registered",
+            "specs": {"Processor": "i7", "Form Factor": "SFF"},
+        },
+    ).json()["asset"]
+    tablet = client.post(
+        "/api/assets",
+        json={
+            "serial": "TAB-KEEP",
+            "projectId": pid,
+            "category": "Tablet",
+            "brand": "Apple",
+            "model": "iPad",
+            "status": "Registered",
+            "specs": {"Screen Size": "10.2", "Cellular": "No"},
+        },
+    ).json()["asset"]
+    synced = client.post(
+        "/api/sync",
+        json={
+            "upserts": {
+                "assets": [
+                    {
+                        "id": desktop["id"],
+                        "_create": True,
+                        "serial": "PRT-NEW",
+                        "usn": "URB-050080",
+                        "projectId": pid,
+                        "category": "Printer",
+                        "brand": "HP",
+                        "model": "M404",
+                        "status": "In Testing",
+                        "specs": {"Type": "Laser", "Mono/Colour": "Mono"},
+                    },
+                    {
+                        "id": tablet["id"],
+                        "_create": True,
+                        "serial": "SRV-NEW",
+                        "usn": "URB-050081",
+                        "projectId": pid,
+                        "category": "Server",
+                        "brand": "Dell",
+                        "model": "R740",
+                        "status": "In Testing",
+                        "specs": {"Form Factor": "2U", "CPU Count": "2"},
+                    },
+                ]
+            }
+        },
+    )
+    assert synced.status_code == 200, synced.text
+    by = _by_serial(synced.json()["state"])
+    assert by["DSK-KEEP"]["id"] == desktop["id"]
+    assert by["DSK-KEEP"]["category"] == "Desktop"
+    assert by["DSK-KEEP"]["specs"]["Form Factor"] == "SFF"
+    assert by["PRT-NEW"]["category"] == "Printer"
+    assert by["PRT-NEW"]["id"] != desktop["id"]
+    assert by["PRT-NEW"]["specs"]["Type"] == "Laser"
+    assert by["TAB-KEEP"]["id"] == tablet["id"]
+    assert by["TAB-KEEP"]["category"] == "Tablet"
+    assert by["SRV-NEW"]["category"] == "Server"
+    assert by["SRV-NEW"]["id"] != tablet["id"]
+    assert by["SRV-NEW"]["specs"]["CPU Count"] == "2"
+
+
+def test_asset_category_is_canonical_and_put_does_not_split_the_row(client):
+    pid = _project_for_assets(client)
+    created = client.post(
+        "/api/assets",
+        json={"serial": "MIX-1", "projectId": pid, "category": "laptop", "status": "Registered"},
+    )
+    assert created.status_code == 200, created.text
+    row = created.json()["asset"]
+    assert row["category"] == "Laptop"
+    edited = client.put(
+        f"/api/assets/{row['id']}",
+        json={
+            "id": row["id"],
+            "serial": "MIX-1-B",
+            "usn": "URB-059999",
+            "projectId": pid,
+            "category": "Laptop",
+            "status": "In Testing",
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["asset"]["id"] == row["id"]
+    assert edited.json()["asset"]["serial"] == "MIX-1-B"
+    live = _by_serial(client.get("/api/state").json()["state"])
+    assert "MIX-1" not in live
+    assert live["MIX-1-B"]["id"] == row["id"]
+
+
+def test_swapped_laptop_monitor_legends_are_repaired_on_read(client):
+    enroll_and_login(client)
+    from app.masters import SPEC_FIELDS, TEST_PARAMS
+
+    swapped = client.post(
+        "/api/sync",
+        json={
+            "upserts": {
+                "specFields": {**SPEC_FIELDS, "Laptop": list(SPEC_FIELDS["Monitor"])},
+                "testParams": {**TEST_PARAMS, "Laptop": list(TEST_PARAMS["Monitor"])},
+            }
+        },
+    )
+    assert swapped.status_code == 200, swapped.text
+    view = client.get("/api/state").json()["state"]
+    assert "Processor" in view["specFields"]["Laptop"]
+    assert "Panel Type" not in view["specFields"]["Laptop"]
+    assert view["specFields"]["Monitor"] == list(SPEC_FIELDS["Monitor"])
+    laptop_keys = {p["key"] for p in view["testParams"]["Laptop"]}
+    assert "keyboard" in laptop_keys
+    assert "panel" not in laptop_keys

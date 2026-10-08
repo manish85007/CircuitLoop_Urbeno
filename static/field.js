@@ -171,9 +171,59 @@ const clientName=id=>{const c=(Array.isArray(DB.clients)?DB.clients:[]).find(x=>
 const projectById=id=>(Array.isArray(DB.projects)?DB.projects:[]).find(p=>p&&p.id===id);
 const projectName=id=>{const p=projectById(id);return p?p.name:'—';};
 function labelHtml(p){return esc(String((p&&p.label)||'').replace(/&amp;/g,'&'));}
-const paramsFor=cat=>(DB.testParams&&DB.testParams[cat])||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
-const specsFor=cat=>(DB.specFields&&DB.specFields[cat])||['Make/Model detail','Year'];
-const isBlanccoCat=cat=>Array.isArray(DB.blanccoCategories)&&DB.blanccoCategories.includes(cat);
+function canonCategory(value){
+ ensureDbLists();
+ const raw=String(value||'').trim();
+ const cats=(Array.isArray(DB.categories)?DB.categories:[]).map(c=>String(c||'').trim()).filter(Boolean);
+ if(!raw)return '';
+ for(const c of cats){if(c===raw)return c;}
+ const lower=raw.toLowerCase();
+ for(const c of cats){if(c.toLowerCase()===lower)return c;}
+ return raw;
+}
+function lookupByCategory(map,cat){
+ if(!map||typeof map!=='object')return null;
+ const canon=canonCategory(cat)||String(cat||'').trim();
+ if(canon&&Array.isArray(map[canon])&&map[canon].length)return map[canon];
+ const raw=String(cat||'').trim();
+ if(raw&&Array.isArray(map[raw])&&map[raw].length)return map[raw];
+ const lower=canon.toLowerCase();
+ for(const k of Object.keys(map)){
+  if(String(k).toLowerCase()===lower&&Array.isArray(map[k])&&map[k].length)return map[k];
+ }
+ return null;
+}
+function paramsFor(cat){
+ return lookupByCategory(DB.testParams,cat)||[{key:'poweron',label:'Powers on',critical:true},{key:'condition',label:'General condition acceptable',critical:false}];
+}
+function specsFor(cat){
+ return lookupByCategory(DB.specFields,cat)||['Make/Model detail','Year'];
+}
+function categoryOptions(selected,placeholder,only){
+ ensureDbLists();
+ const sel=canonCategory(selected);
+ const source=(only&&only.length)?only:(Array.isArray(DB.categories)?DB.categories:[]);
+ const cats=source.map(c=>canonCategory(c)||String(c||'').trim()).filter((c,i,arr)=>c&&arr.indexOf(c)===i);
+ const ph=placeholder?`<option value="" ${sel?'':'selected'} disabled>${esc(placeholder)}</option>`:'';
+ return ph+cats.map(c=>`<option value="${esc(c)}" ${c===sel?'selected':''}>${esc(c)}</option>`).join('');
+}
+function scopeCategories(project){
+ const scope=(project&&Array.isArray(project.scope)?project.scope:[]).map(s=>canonCategory(s&&s.category)).filter(Boolean);
+ if(scope.length)return scope.filter((c,i)=>scope.indexOf(c)===i);
+ return (DB.categories||[]).slice();
+}
+function assetById(id){
+ const list=Array.isArray(DB.assets)?DB.assets:[];
+ let found=null;
+ for(let i=0;i<list.length;i++){
+  if(list[i]&&list[i].id===id)found=list[i];
+ }
+ return found;
+}
+const isBlanccoCat=cat=>{
+ const c=canonCategory(cat);
+ return Array.isArray(DB.blanccoCategories)&&(DB.blanccoCategories.includes(c)||DB.blanccoCategories.includes(cat));
+};
 function badge(s){
  const m={'Registered':'b-gray','In Testing':'b-amber','Tested':'b-purple','Verified':'b-green','Rejected':'b-red',
   'Active':'b-teal','Planned':'b-blue','On Hold':'b-amber','Completed':'b-green','Cancelled':'b-gray',
@@ -197,8 +247,40 @@ function toCSV(cols,rows){
  return [cols.join(',')].concat(rows.map(r=>r.map(v=>'"'+safe(v).replace(/"/g,'""')+'"').join(','))).join('\n');
 }
 function parseCSV(text){return AssetCsv.parseCSV(text);}
-function genUSN(){return 'URB-'+String(DB.seq.usn++).padStart(6,'0');}
-function genAssetId(){return 'AST-'+String(DB.seq.asset++).padStart(5,'0');}
+function nextAssetId(){
+ ensureDbLists();
+ if(!DB.seq||typeof DB.seq!=='object')DB.seq={asset:1,usn:50001,project:1001,client:1,user:3,blancco:1,manifest:1};
+ let n=Math.max(1, Number(DB.seq.asset)||1);
+ (DB.assets||[]).forEach(a=>{
+  const m=String(a&&a.id||'').match(/^AST-(\d+)$/i);
+  if(m) n=Math.max(n, Number(m[1])+1);
+ });
+ DB.seq.asset=n+1;
+ return 'AST-'+String(n).padStart(5,'0');
+}
+function genAssetId(){
+ const used=new Set((DB.assets||[]).map(a=>a&&a.id).filter(Boolean));
+ let id=nextAssetId();
+ while(used.has(id)) id=nextAssetId();
+ return id;
+}
+function genUSN(){
+ ensureDbLists();
+ if(!DB.seq||typeof DB.seq!=='object')DB.seq={asset:1,usn:50001,project:1001,client:1,user:3,blancco:1,manifest:1};
+ let n=Math.max(50001, Number(DB.seq.usn)||50001);
+ (DB.assets||[]).forEach(a=>{
+  const m=String(a&&a.usn||'').match(/^URB-(\d+)$/i);
+  if(m) n=Math.max(n, Number(m[1])+1);
+ });
+ const used=new Set((DB.assets||[]).map(a=>a&&a.usn).filter(Boolean));
+ let usn='URB-'+String(n).padStart(6,'0');
+ while(used.has(usn)){
+  n+=1;
+  usn='URB-'+String(n).padStart(6,'0');
+ }
+ DB.seq.usn=n+1;
+ return usn;
+}
 
 /* ============================================================
    Grading engine
@@ -562,14 +644,18 @@ render(){
  const list=TEST_FILTER==='open'?open:TEST_FILTER==='done'?done:mine;
  const rows=list.slice().reverse().map(a=>{
   const pr=testProgress(a);
-  return `<tr data-id="${esc(a.id)}">
+  const cat=canonCategory(a.category)||a.category||'—';
+  return `<tr data-id="${esc(a.id)}" data-cat="${esc(cat)}">
+   <td><b>${esc(a.serial||'—')}</b><div class="muted" style="font-size:11px">${esc(a.usn||'')}</div></td>
+   <td><b>${esc(cat)}</b><div class="muted" style="font-size:11px">${esc(a.brand||'—')} ${esc(a.model||'')}</div></td>
+   <td>${badge(a.status||'Registered')}</td>
    <td style="min-width:120px"><div class="progressbar"><div style="width:${pr.pct}%"></div></div><span class="muted" style="font-size:11px">${pr.done}/${pr.total}</span></td>
    <td>${a.grade?badge(a.grade):'—'}</td>
-   <td>${isBlanccoCat(a.category)?(a.blancco?badge(a.blancco.status):'<span class="muted" style="font-size:11px">not pulled</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
+   <td>${isBlanccoCat(cat)?(a.blancco?badge(a.blancco.status):'<span class="muted" style="font-size:11px">not pulled</span>'):'<span class="muted" style="font-size:11px">n/a</span>'}</td>
    <td class="flex">
-     <button class="btn btn-sm btn-p" onclick="openTest('${a.id}')">${pr.done?'Continue':'Start'} Test</button>
-     <button class="btn btn-sm" onclick="editAssetDetails('${a.id}','openTest')">Edit</button>
-     <button class="btn btn-sm" onclick="assetLabel('${a.id}')">Label</button>
+     <button class="btn btn-sm btn-p" onclick="openTest('${esc(a.id)}')">${pr.done?'Continue':'Start'} Test</button>
+     <button class="btn btn-sm" onclick="editAssetDetails('${esc(a.id)}','openTest')">Edit</button>
+     <button class="btn btn-sm" onclick="assetLabel('${esc(a.id)}')">Label</button>
    </td></tr>`;
  }).join('');
  const scopeChips=(p.scope||[]).map(s=>{
@@ -708,7 +794,7 @@ function scannerHTML(){
    </div>
    <div id="batchopts" class="${SCAN_MODE==='batch'?'':'hide'}">
      <label class="f">Register batch scans as</label>
-     <select id="batchcat">${(cats.length?cats:DB.categories).map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+     <select id="batchcat">${(cats.length?cats:DB.categories).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select>
      <div class="muted" style="font-size:12px;margin-top:6px">Each scan is registered instantly against ${esc(ACTIVE_PROJECT||'')} with this category, ready to test later. Keep scanning without stopping.</div>
    </div>
    <div id="scanhits" class="scanhits" style="margin-top:12px"></div>
@@ -782,9 +868,9 @@ function batchCapture(serial){
   paintHits();return;
  }
  const assigned=assignNoSerial(serial,ACTIVE_PROJECT);
- const cat=($('#batchcat')&&$('#batchcat').value)||DB.categories[0];
+ const cat=canonCategory(($('#batchcat')&&$('#batchcat').value)||'')||scopeCategories(projectById(ACTIVE_PROJECT))[0]||'Laptop';
  const noSer=isNoSerialValue(assigned);
- const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,brand:'—',model:'—',serial:assigned,
+ const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,_create:true,brand:'—',model:'—',serial:assigned,
   assetTag:'',cosmetic:'B',status:'Registered',tests:{},specs:{},remarks:'',
   testedBy:null,testedAt:null,verifiedBy:null,verifiedAt:null,blancco:null,
   history:[{ts:stamp(),by:ME.name,ev:noSer?'Quick-captured without factory serial ('+assigned+') — physical / no-power check':'Quick-captured by camera scan (batch mode)'}]};
@@ -807,7 +893,7 @@ function focusScanInput(){
 }
 function registerAsset(serial,noSerial){
  const p=projectById(ACTIVE_PROJECT);
- const cats=p.scope.length?p.scope.map(s=>s.category):DB.categories;
+ const cats=scopeCategories(p);
  const assigned=noSerial||isNoSerialValue(serial)?assignNoSerial(serial,ACTIVE_PROJECT):String(serial||'').trim();
  const noSer=isNoSerialValue(assigned);
  openModal(`
@@ -818,7 +904,7 @@ function registerAsset(serial,noSerial){
      : `<div class="info">New serial. It will be added to <b>${esc(p.id)} — ${esc(p.name)}</b> and given a CircuitLoop USN.</div>`}
    <div class="frow">
      <div><label class="f">${noSer?'Assigned serial (no factory SN)':'Serial number (scanned)'}</label><input id="ra_serial" value="${esc(assigned)}" ${noSer?'readonly':''}></div>
-     <div><label class="f">Category</label><select id="ra_cat" onchange="raSpecs()">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
+     <div><label class="f">Category</label><select id="ra_cat" onchange="raSpecs()">${categoryOptions('', 'Select category', cats)}</select></div>
    </div>
    <div class="frow">
      <div><label class="f">Brand</label><input id="ra_brand" placeholder="Dell / HP / Lenovo"></div>
@@ -836,7 +922,12 @@ function registerAsset(serial,noSerial){
  raSpecs();
 }
 function raSpecs(){
- const cat=$('#ra_cat').value;
+ const raw=$('#ra_cat')&&$('#ra_cat').value;
+ const cat=canonCategory(raw);
+ if(!cat){
+  $('#ra_specs').innerHTML='<div class="muted" style="margin-top:12px">Select a device category to load its specification fields and test checklist.</div>';
+  return;
+ }
  $('#ra_specs').innerHTML='<label class="f" style="margin-top:12px">Technical specifications — '+esc(cat)+'</label><div class="frow3">'+
   specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="ras_${i}" data-f="${esc(f)}"></div>`).join('')+'</div>';
 }
@@ -847,10 +938,11 @@ function saveRegister(){
   if(isNoSerialValue(serial)){serial=nextNoSerial(ACTIVE_PROJECT);}
   else {toast('Serial '+serial+' already exists in the register');return;}
  }
- const cat=$('#ra_cat').value;
+ const cat=canonCategory($('#ra_cat')&&$('#ra_cat').value);
+ if(!cat){toast('Select a device category');return;}
  const specs={};$$('#ra_specs input').forEach(el=>{if(el.value)specs[el.dataset.f]=el.value;});
  const noSer=isNoSerialValue(serial);
- const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,
+ const a={id:genAssetId(),usn:genUSN(),projectId:ACTIVE_PROJECT,category:cat,_create:true,
   brand:$('#ra_brand').value||'—',model:$('#ra_model').value||'—',serial:serial,
   assetTag:$('#ra_tag').value||'',cosmetic:$('#ra_cos').value,status:'In Testing',
   tests:{},specs:specs,remarks:String($('#ra_rem').value||'').slice(0,500),
@@ -867,9 +959,10 @@ function saveRegister(){
 /* ---------- Test sheet ---------- */
 let TESTING_ID=null;
 function openTest(id){
- const a=DB.assets.find(x=>x.id===id);
+ const a=assetById(id);
  if(!a)return;
- TESTING_ID=id;
+ TESTING_ID=a.id;
+ a.category=canonCategory(a.category)||a.category;
  const locked=a.status==='Verified';
  if(a.status==='Registered'){a.status='In Testing';a.history=a.history||[];a.history.push({ts:stamp(),by:ME.name,ev:'Testing started'});persistHint();}
  const params=paramsFor(a.category);
@@ -946,7 +1039,7 @@ function openTest(id){
  </div>`,true);
 }
 function setTest(key,val){
- const a=DB.assets.find(x=>x.id===TESTING_ID);
+ const a=assetById(TESTING_ID);
  if(!a)return;
  if(a.status==='Verified'){toast('Verified assets are locked. Reopen for re-verification to edit.');return;}
  a.tests[key]=a.tests[key]===val?'':val;
@@ -955,30 +1048,30 @@ function setTest(key,val){
  openTest(a.id);
 }
 function markAllPass(id){
- const a=DB.assets.find(x=>x.id===id);
- if(a.status==='Verified'){toast('Verified assets are locked.');return;}
+ const a=assetById(id);
+ if(!a||a.status==='Verified'){toast('Verified assets are locked.');return;}
  paramsFor(a.category).forEach(p=>{a.tests[p.key]='Pass';});
  recomputeGrade(a);persistHint();openTest(a.id);
  toast('All parameters marked Pass. Change any that failed.');
 }
 function setMeasure(key,val){
- const a=DB.assets.find(x=>x.id===TESTING_ID);
+ const a=assetById(TESTING_ID);
  if(!a||a.status==='Verified')return;
  a.measures=a.measures||{};a.measures[key]=val;persistHint();
 }
 function setCosmetic(v){
- const a=DB.assets.find(x=>x.id===TESTING_ID);
+ const a=assetById(TESTING_ID);
  if(!a||a.status==='Verified'){toast('Verified assets are locked.');return;}
  a.cosmetic=v;recomputeGrade(a);persistHint();openTest(a.id);
 }
 function setRemarks(v){
- const a=DB.assets.find(x=>x.id===TESTING_ID);
+ const a=assetById(TESTING_ID);
  if(!a||a.status==='Verified')return;
  a.remarks=String(v||'').slice(0,500);persistHint();
 }
 function reopenVerified(id){
  if(!canVerify()){toast('Only a Lead Engineer or Super Admin can reopen a verified asset.');return;}
- const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ const a=assetById(id);if(!a)return;
  a.frozenGrade=a.grade;a.frozenGradeReason=a.gradeReason;a.gradeFrozen=true;
  a.status='In Testing';a.verifiedBy=null;a.verifiedAt=null;
  a.history=a.history||[];
@@ -986,7 +1079,9 @@ function reopenVerified(id){
  persistHint();openTest(id);toast('Reopened. Edit, then verify again. Previous grade stays until re-verification.');
 }
 function editSpecs(id){
- const a=DB.assets.find(x=>x.id===id);
+ const a=assetById(id);
+ if(!a)return;
+ a.category=canonCategory(a.category)||a.category;
  openModal(`<div class="modal-h"><h3>Specifications — ${esc(a.serial)}</h3><button class="x" onclick="openTest('${id}')">×</button></div>
  <div class="modal-b"><div class="frow">
   ${specsFor(a.category).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="es_${i}" data-f="${esc(f)}" value="${esc((a.specs||{})[f]||'')}"></div>`).join('')}
@@ -995,14 +1090,14 @@ function editSpecs(id){
   <button class="btn btn-p" onclick="saveSpecs('${id}')">Save specs</button></div>`);
 }
 function saveSpecs(id){
- const a=DB.assets.find(x=>x.id===id);
+ const a=assetById(id);if(!a)return;
  a.specs=a.specs||{};
  $$('#modalbox input[data-f]').forEach(el=>{if(el.value)a.specs[el.dataset.f]=el.value;else delete a.specs[el.dataset.f];});
  toast('Specifications saved');
  openTest(id);
 }
 function submitTest(id){
- const a=DB.assets.find(x=>x.id===id);
+ const a=assetById(id);if(!a)return;
  const pr=testProgress(a);
  if(pr.done<pr.total){toast('Record all '+pr.total+' test parameters before submitting ('+pr.done+' done)');return;}
  a.status='Tested';a.testedBy=ME.id;a.testedAt=today();
@@ -1012,7 +1107,7 @@ function submitTest(id){
  toast(a.serial+' submitted — grade '+a.grade+'. Awaiting Lead Engineer or Super Admin verification.');
 }
 function patchMakeModel(id,key,val){
- const a=DB.assets.find(x=>x.id===id);if(!a)return;
+ const a=assetById(id);if(!a)return;
  const next=String(val||'').trim()||'—';
  if(a[key]===next)return;
  const label=key==='brand'?'make':'model';
@@ -1040,8 +1135,9 @@ function usnTakenByOther(usn,exceptId){
  return (DB.assets||[]).some(a=>a.id!==exceptId&&String(a.usn||'').toLowerCase()===s);
 }
 function editAssetDetails(id,back){
- const a=DB.assets.find(x=>x.id===id);if(!a)return;
- window.EDITING_ID=id;
+ const a=assetById(id);if(!a)return;
+ window.EDITING_ID=a.id;
+ a.category=canonCategory(a.category)||a.category;
  const backFn=back==='assetDetail'?'assetDetail':'openTest';
  const projs=(isReviewer()?DB.projects:myProjects()).slice();
  if(a.projectId&&!projs.some(p=>p.id===a.projectId)){
@@ -1059,7 +1155,7 @@ function editAssetDetails(id,back){
    <div><label class="f">Model</label><input id="ed_model" value="${esc(a.model==='—'?'':a.model)}" placeholder="Latitude 5540"></div>
   </div>
   <div class="frow">
-   <div><label class="f">Category</label><select id="ed_cat" onchange="refreshEditSpecs()">${DB.categories.map(c=>`<option ${c===a.category?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+   <div><label class="f">Category</label><select id="ed_cat" onchange="refreshEditSpecs()">${categoryOptions(a.category)}</select></div>
    <div><label class="f">Project</label><select id="ed_proj">${projs.map(p=>`<option value="${esc(p.id)}" ${p.id===a.projectId?'selected':''}>${esc(p.id)} — ${esc(p.name)}</option>`).join('')}</select></div>
   </div>
   <div class="frow">
@@ -1075,18 +1171,18 @@ function editAssetDetails(id,back){
 }
 function refreshEditSpecs(){
  const el=$('#ed_specs');if(!el)return;
- const a=DB.assets.find(x=>x.id===window.EDITING_ID);
- const cat=($('#ed_cat')&&$('#ed_cat').value)||(a&&a.category);
+ const a=assetById(window.EDITING_ID);
+ const cat=canonCategory(($('#ed_cat')&&$('#ed_cat').value)||(a&&a.category));
  const current=(a&&a.specs)||{};
  el.innerHTML='<label class="f" style="margin-top:12px">Specifications — '+esc(cat)+'</label><div class="frow3">'+
   specsFor(cat).map((f,i)=>`<div><label class="f">${esc(f)}</label><input id="eds_${i}" data-f="${esc(f)}" value="${esc(current[f]||'')}"></div>`).join('')+'</div>';
 }
 function saveAssetDetails(id,backFn){
- let a=DB.assets.find(x=>x.id===id);if(!a)return;
+ let a=assetById(id);if(!a)return;
  if(a.status==='Verified'){
   if(!canVerify()){toast('Verified assets are locked.');return;}
   reopenVerified(id);
-  a=DB.assets.find(x=>x.id===id);
+  a=assetById(id);
  }
  const serial=String($('#ed_serial').value||'').trim();
  const usn=String($('#ed_usn').value||'').trim();
@@ -1095,7 +1191,8 @@ function saveAssetDetails(id,backFn){
  const projectId=$('#ed_proj').value||a.projectId;
  if(serialTakenByOther(serial,projectId,id)){toast('Serial '+serial+' already exists in the register');return;}
  if(usnTakenByOther(usn,id)){toast('USN '+usn+' already exists in the register');return;}
- const cat=$('#ed_cat').value;
+ const cat=canonCategory($('#ed_cat')&&$('#ed_cat').value);
+ if(!cat){toast('Select a device category');return;}
  const brand=String($('#ed_brand').value||'').trim()||'—';
  const model=String($('#ed_model').value||'').trim()||'—';
  const specs={};
@@ -2077,7 +2174,7 @@ function mdBody(){
    <div class="tblwrap"><table><thead><tr><th>Category</th><th>Test parameters</th><th>Assets</th><th>Data sanitization</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
  }
  if(MD_TAB==='params'){
-  const cat=window.PARAM_CAT||DB.categories[0];
+  const cat=canonCategory(window.PARAM_CAT)||DB.categories[0];
   const ps=paramsFor(cat);
   const rows=ps.map((p,i)=>`<tr><td>${i+1}</td><td><b>${p.label}</b>${p.blancco?' <span class="tag">Blancco-linked</span>':''}</td>
    <td>${p.critical?'<span class="badge b-red">Critical</span>':'<span class="badge b-gray">Standard</span>'}</td>
@@ -2085,7 +2182,7 @@ function mdBody(){
    <td class="flex"><button class="btn btn-sm" onclick="toggleCritical('${esc(cat)}',${i})">${p.critical?'Make standard':'Make critical'}</button>
     <button class="btn btn-sm btn-danger" onclick="delParam('${esc(cat)}',${i})">Remove</button></td></tr>`).join('');
   return `<div class="card"><div class="card-h"><h3>Test parameters</h3>
-    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${DB.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${categoryOptions(cat)}</select></div>
    <div class="card-b">
     <div class="muted" style="font-size:12px;margin-bottom:8px">A <b>critical</b> failure forces the asset to grade D regardless of cosmetics. Engineers must record every parameter before submitting.
      ${isBlanccoCat(cat)?'This category can link a Blancco report when the client opts in. Sanitization can always be set by hand — Blancco is never required to submit.':''}</div>
@@ -2098,9 +2195,9 @@ function mdBody(){
    <div class="tblwrap"><table><thead><tr><th>#</th><th>Parameter</th><th>Severity</th><th>Measured value</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
  }
  if(MD_TAB==='specs'){
-  const cat=window.PARAM_CAT||DB.categories[0];
+  const cat=canonCategory(window.PARAM_CAT)||DB.categories[0];
   return `<div class="card"><div class="card-h"><h3>Specification fields</h3>
-    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${DB.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <select onchange="PARAM_CAT=this.value;rerender()" style="max-width:220px">${categoryOptions(cat)}</select></div>
    <div class="card-b">
     <div class="muted" style="font-size:12px;margin-bottom:8px">These fields appear on the asset registration form and the test sheet for <b>${esc(cat)}</b>. Add whatever your clients ask for — they flow into the register and all CSV exports.</div>
     <div class="flex"><input id="ms_name" placeholder="e.g. Battery Cycle Count" style="max-width:260px">
@@ -2549,4 +2646,14 @@ window.newProject=newProject;
 window.editProject=editProject;
 window.saveProject=saveProject;
 window.nextProjectId=nextProjectId;
+window.nextAssetId=nextAssetId;
+window.genAssetId=genAssetId;
+window.canonCategory=canonCategory;
+window.paramsFor=paramsFor;
+window.specsFor=specsFor;
+window.assetById=assetById;
+window.categoryOptions=categoryOptions;
+window.registerAsset=registerAsset;
+window.raSpecs=raSpecs;
+window.openTest=openTest;
 window.logout=logout;

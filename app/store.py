@@ -254,6 +254,7 @@ def filter_state_for_user(state: dict[str, Any] | None, user: dict[str, Any]) ->
     if not state:
         state = empty_production_state()
     view = _strip_secrets(state)
+    _repair_seed_legends(view)
     uid = user.get("id") or user.get("userId")
     if can_review_all(user):
         view["users"] = [public_user(u, include_contact=True) for u in (view.get("users") or [])]
@@ -311,6 +312,81 @@ def _advance_seq(seq: dict[str, Any], kind: str, value: Any, prefix: str) -> Non
     if n < 0:
         return
     seq[kind] = max(int(seq.get(kind) or 1), n + 1)
+
+
+def _legend_overlap(have: Any, seed: Any) -> float:
+    want = {str(v).strip() for v in (seed or []) if str(v).strip()}
+    if not want:
+        return 1.0
+    got = {str(v).strip() for v in (have or []) if str(v).strip()}
+    return len(got & want) / len(want)
+
+
+def _param_keys(params: Any) -> set[str]:
+    keys: set[str] = set()
+    for row in params or []:
+        if isinstance(row, dict) and row.get("key"):
+            keys.add(str(row.get("key")).strip())
+    return keys
+
+
+def _param_overlap(have: Any, seed: Any) -> float:
+    want = _param_keys(seed)
+    if not want:
+        return 1.0
+    return len(_param_keys(have) & want) / len(want)
+
+
+def _repair_seed_legends(state: dict[str, Any]) -> dict[str, Any]:
+    """If a seed category's spec/test legend looks like another type, restore the seed."""
+    specs = dict(state.get("specFields") or {})
+    params = dict(state.get("testParams") or {})
+    for cat, seed in SPEC_FIELDS.items():
+        have = specs.get(cat)
+        if not isinstance(have, list) or not have:
+            specs[cat] = copy.deepcopy(seed)
+            continue
+        if _legend_overlap(have, seed) >= 0.5:
+            continue
+        for other, other_seed in SPEC_FIELDS.items():
+            if other == cat:
+                continue
+            if _legend_overlap(have, other_seed) >= 0.5:
+                specs[cat] = copy.deepcopy(seed)
+                break
+    for cat, seed in TEST_PARAMS.items():
+        have = params.get(cat)
+        if not isinstance(have, list) or not have:
+            params[cat] = copy.deepcopy(seed)
+            continue
+        if _param_overlap(have, seed) >= 0.5:
+            continue
+        for other, other_seed in TEST_PARAMS.items():
+            if other == cat:
+                continue
+            if _param_overlap(have, other_seed) >= 0.5:
+                params[cat] = copy.deepcopy(seed)
+                break
+    state["specFields"] = specs
+    state["testParams"] = params
+    return state
+
+
+def _canon_category(state: dict[str, Any], value: Any) -> str:
+    raw = str(value or "").strip()[:40]
+    cats = [str(c).strip() for c in (state.get("categories") or []) if str(c).strip()]
+    if not cats:
+        cats = list(CATEGORIES)
+    if not raw:
+        return cats[0] if cats else "Laptop"
+    for c in cats:
+        if c == raw:
+            return c
+    lower = raw.lower()
+    for c in cats:
+        if c.lower() == lower:
+            return c
+    return raw
 
 
 def _history_entry(user: dict[str, Any], ev: str) -> dict[str, str]:
@@ -432,19 +508,42 @@ def upsert_asset(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any
     with _lock:
         state = _read_unlocked() or empty_production_state()
         seq = dict(state.get("seq") or {})
-        asset_id = str(payload.get("id") or "").strip() or _next_id(seq, "asset", "AST-", 5)
-        existing = _find(state.get("assets") or [], asset_id)
+        payload = dict(payload)
+        create = bool(payload.pop("_create", False))
+        requested = str(payload.get("id") or "").strip()
+        if requested:
+            _advance_seq(seq, "asset", requested, "AST-")
+        existing = _find(state.get("assets") or [], requested) if requested else None
+        incoming_serial = str(payload.get("serial") or "").strip()
+        incoming_usn = str(payload.get("usn") or "").strip()
+        # A new capture (_create) must not overwrite another unit that already holds this AST- id.
+        if existing and create:
+            same_serial = bool(incoming_serial) and str(existing.get("serial") or "").lower() == incoming_serial.lower()
+            if not same_serial:
+                existing = None
+                requested = ""
+        if not incoming_serial:
+            incoming_serial = str((existing or {}).get("serial") or "").strip()
+        if not incoming_usn:
+            incoming_usn = str((existing or {}).get("usn") or "").strip()
+        if not requested:
+            asset_id = _next_id(seq, "asset", "AST-", 5)
+        else:
+            asset_id = requested
+        _advance_seq(seq, "asset", asset_id, "AST-")
+        if incoming_usn:
+            _advance_seq(seq, "usn", incoming_usn, "URB-")
         project_id = str(payload.get("projectId") or (existing or {}).get("projectId") or "").strip()
         if not project_id:
             raise HTTPException(status_code=400, detail="Project is required.")
         if not _can_edit_project(user, state, project_id):
             raise HTTPException(status_code=403, detail="That project is not assigned to you.")
-        serial = str(payload.get("serial") or (existing or {}).get("serial") or "").strip()
+        serial = incoming_serial or str(payload.get("serial") or (existing or {}).get("serial") or "").strip()
         if not serial or not SERIAL_RE.match(serial):
             raise HTTPException(status_code=400, detail="Serial is required.")
         if serial_taken(state, serial, project_id, existing.get("id") if existing else None):
             raise HTTPException(status_code=409, detail="Serial already exists on an active project.")
-        usn = str(payload.get("usn") or (existing or {}).get("usn") or "").strip()
+        usn = incoming_usn or str(payload.get("usn") or (existing or {}).get("usn") or "").strip()
         if not usn:
             usn = _next_id(seq, "usn", "URB-", 6)
         status = str(payload.get("status") or (existing or {}).get("status") or "Registered")
@@ -459,7 +558,7 @@ def upsert_asset(user: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any
         incoming["serial"] = serial
         incoming["usn"] = usn
         incoming["status"] = status
-        incoming["category"] = str(incoming.get("category") or "Laptop")[:40]
+        incoming["category"] = _canon_category(state, incoming.get("category") or (existing or {}).get("category"))
         incoming["brand"] = str(incoming.get("brand") or "—")[:80]
         incoming["model"] = str(incoming.get("model") or "—")[:80]
         incoming["remarks"] = str(incoming.get("remarks") or "")[:500]
